@@ -9,8 +9,9 @@ servicePort: 80
 containerPort: 8080
 component: "croc-hunter"
 replicas: 3
-image: rackacr2.azurecr.io/villanub/croc-hunter
-imageTag: master
+image: 
+  repository: rackacr2.azurecr.io/villanub/croc-hunter
+  tag: latest
 imagePullPolicy: Always
 cpu: "10m"
 memory: "128Mi"
@@ -27,8 +28,4 @@ ingress:
 pdb:
   enabled: false
   minAvailable: 2
-## Config Map
-commit:
-  sha: "8c149d9"
-  branch: "master"
-  repo : "jldeen/crochunter"
+
