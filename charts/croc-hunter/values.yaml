@@ -12,6 +12,7 @@ replicas: 3
 image: "quay.io/lachie83/croc-hunter"
 imageTag: "latest"
 imagePullPolicy: Always
+imagePullSecrets: "vsts-secret"
 cpu: "10m"
 memory: "128Mi"
 ## Ingress settings
