@@ -14,7 +14,7 @@ imageTag: master
 imagePullPolicy: Always
 ## If you have a private registry you specify a secret to use --- add note about how secrets work with jenkinsfile set// 
 imagePullSecrets: 
-  name: vsts-secrets
+  name: "vsts-secret"
 cpu: "10m"
 memory: "128Mi"
 ## Ingress settings
