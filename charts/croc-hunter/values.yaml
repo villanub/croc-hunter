@@ -4,8 +4,6 @@ containerPort: 8080
 cpu: 10m
 image: quay.io/lachie83/croc-hunter
 imagePullPolicy: Always
-imagePullSecrets: 
-  name: acr-auth
 imageTag: latest
 ingress: 
   annotations: 
