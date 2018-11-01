@@ -3,7 +3,8 @@
 # Declare name/value pairs to be passed into your templates.
 # name: value
 
-serviceType: ClusterIP
+service:
+  type: ClusterIP
 servicePort: 80
 containerPort: 8080
 component: "croc-hunter"
