@@ -9,9 +9,6 @@ servicePort: 80
 containerPort: 8080
 component: "croc-hunter"
 replicas: 3
-image: 
-  repository: rackacr2.azurecr.io/villanub/croc-hunter
-  tag: latest
 imagePullPolicy: Always
 cpu: "10m"
 memory: "128Mi"
