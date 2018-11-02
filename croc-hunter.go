@@ -66,8 +66,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	release := os.Getenv("WORKFLOW_RELEASE")
-	commit := os.Getenv("BUILD_SOURCEVERSION")
-	sha := os.Getenv("SHA")
+	commit := os.Getenv("SourceVersion")
+	SourceVersion := os.Getenv("SourceVersion")
 	powered := os.Getenv("AGENT_MACHINENAME")
 
 	if release == "" {
@@ -76,8 +76,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if commit == "" {
 		commit = "not present"
 	}
-	if sha == "" {
-		sha = "not present"
+	if SourceVersion == "" {
+		SourceVersion = "not present"
 	}
 	if powered == "" {
 		powered = "deis"
