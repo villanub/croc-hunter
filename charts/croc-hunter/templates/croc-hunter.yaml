@@ -54,6 +54,8 @@ spec:
           env:
           - name: WORKFLOW_RELEASE
             value: {{.Release.Name | quote }}
+            name: SHA
+            value: {{.Values.SourceVersion}}
           livenessProbe:
             httpGet:
               path: /healthz
