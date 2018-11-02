@@ -46,6 +46,7 @@ const (
 				<strong>Hostname: </strong>%s<br>
 				<strong>Release: </strong>%s<br>
 				<strong>Commit: </strong>%s<br>
+				<strong>SourceVersion: </strong>%s<br>
 				<strong>Powered By: </strong>%s<br>
 				</div>
 			</body>
