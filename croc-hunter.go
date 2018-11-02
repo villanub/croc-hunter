@@ -66,8 +66,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	release := os.Getenv("WORKFLOW_RELEASE")
-	commit := os.Getenv("GIT_SHA")
-	powered := os.Getenv("POWERED_BY")
+	commit := os.Getenv("BUILD_SOURCEVERSION")
+	powered := os.Getenv("AGENT_MACHINENAME")
 
 	if release == "" {
 		release = "unknown"

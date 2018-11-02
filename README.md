@@ -1,11 +1,7 @@
-# croc-hunter
-Croc Hunter AKS Demo
+# Croc Hunter - The game
 
-# Croc Hunter - The game!
+Croc Hunter AKS DEMO - For those that have dreamt to hunt crocs
 
-For those that have dreamt to hunt crocs
+## Usage
 
-# Usage
-Basic go webserver to demonstrate example CI/CD pipeline using Kubernetes 
-
-=======
+Basic go webserver to demonstrate example CI/CD pipeline using Kubernetes
