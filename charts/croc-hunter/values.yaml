@@ -23,7 +23,3 @@ replicas: 3
 service: 
   type: ClusterIP
 servicePort: 80
-commit:
-  sha: "b0ad94"
-  branch: "dev"
-  repo : "villanub/croc-hunter"

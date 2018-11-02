@@ -5,6 +5,7 @@ ARG VCS_URL
 ARG VCS_REF
 ARG BUILD_DATE
 ARG BUILD_VERSION
+ARG BUILD_SOURCEVERSION
 
 # Metadata
 LABEL org.label-schema.vcs-url="https://github.com/villanub/croc-hunter" \
