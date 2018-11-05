@@ -1,0 +1,6 @@
+version: '3.4'
+services:
+  croc-hunter:
+    image: croc-hunter
+    ports:
+      - 8080:8080
