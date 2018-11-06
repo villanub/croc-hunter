@@ -84,5 +84,5 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		powered = "deis"
 	}
 
-	fmt.Fprintf(w, html, hostname, release, commit, powered)
+	fmt.Fprintf(w, html, hostname, release, commit, SourceVersion, powered)
 }
