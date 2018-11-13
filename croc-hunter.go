@@ -7,9 +7,25 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	newrelic "github.com/newrelic/go-agent"
+)
+
+var (
+	app newrelic.Application
 )
 
 func main() {
+	config := newrelic.NewConfig("Croc-Hunter", "ef9a08cf2cf2f84dfd405242b5fdb5d2bdb7af79")
+	config.Logger = newrelic.NewDebugLogger(os.Stdout)
+
+	var err error
+	app, err = newrelic.NewApplication(config)
+	if nil != err {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	httpListenAddr := flag.String("port", "8080", "HTTP Listen address.")
 
 	flag.Parse()
@@ -17,13 +33,14 @@ func main() {
 	log.Println("Starting server...")
 
 	// point / at the handler function
-	http.HandleFunc("/", handler)
+	http.HandleFunc(newrelic.WrapHandleFunc(app, "/", handler))
 
 	// serve static content from /static
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static/"))))
 
 	log.Println("Server started. Listening on port " + *httpListenAddr)
 	log.Fatal(http.ListenAndServe(":"+*httpListenAddr, nil))
+
 }
 
 const (
@@ -67,9 +84,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	release := os.Getenv("WORKFLOW_RELEASE")
-	commit := os.Getenv("SourceVersion")
+	commit := os.Getenv("GIT_SHA")
 	SourceVersion := os.Getenv("SourceVersion")
-	powered := os.Getenv("AGENT_MACHINENAME")
+	Namespace := os.Getenv("Namespace")
 
 	if release == "" {
 		release = "unknown"
@@ -80,9 +97,17 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if SourceVersion == "" {
 		SourceVersion = "not present"
 	}
-	if powered == "" {
-		powered = "deis"
+	if Namespace == "" {
+		Namespace = "deis"
 	}
 
-	fmt.Fprintf(w, html, hostname, release, commit, SourceVersion, powered)
+	fmt.Fprintf(w, html, hostname, release, commit, SourceVersion, Namespace)
+
+}
+
+func mustGetEnv(key string) string {
+	if val := os.Getenv(key); "" != val {
+		return val
+	}
+	panic(fmt.Sprintf("environment variable %s unset", key))
 }

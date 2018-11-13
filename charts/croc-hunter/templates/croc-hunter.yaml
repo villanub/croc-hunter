@@ -54,6 +54,8 @@ spec:
           env:
           - name: WORKFLOW_RELEASE
             value: {{.Release.Name | quote }}
+          - name: NAMESPACE
+            value: {{.Release.Namespace}}
           livenessProbe:
             httpGet:
               path: /healthz

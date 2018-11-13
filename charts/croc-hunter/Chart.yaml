@@ -2,3 +2,8 @@ apiVersion: v1
 description: A Helm chart for Kubernetes
 name: croc-hunter
 version: v0.1.0
+sources: 
+- https://github.com/villanub/croc-hunter
+maintainers:
+- name: benjamin
+  email: villanub@users.noreply.github.com
