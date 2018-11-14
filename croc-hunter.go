@@ -7,52 +7,23 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
-
-	newrelic "github.com/newrelic/go-agent"
-	git "gopkg.in/src-d/go-git.v4"
-	"gopkg.in/src-d/go-git.v4/storage/memory"
+	//newrelic "github.com/newrelic/go-agent"
 )
 
-var (
-	app newrelic.Application
-)
+//var (
+//	app newrelic.Application
+//)
 
 func main() {
-	config := newrelic.NewConfig("Croc-Hunter", "ef9a08cf2cf2f84dfd405242b5fdb5d2bdb7af79")
-	config.Logger = newrelic.NewDebugLogger(os.Stdout)
+	//	config := newrelic.NewConfig("Croc-Hunter", "ef9a08cf2cf2f84dfd405242b5fdb5d2bdb7af79")
+	//	config.Logger = newrelic.NewDebugLogger(os.Stdout)
 
-	var err error
-	app, err = newrelic.NewApplication(config)
-	if nil != err {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	// Clones the given repository in memory, creating the remote, the local
-	// branches and fetching the objects, exactly as:
-	//Info("git clone https://github.com/villanub/croc-hunter.git")
-
-	r, err := git.Clone(memory.NewStorage(), nil, &git.CloneOptions{
-		URL: "https://github.com/villanub/croc-hunter.git",
-
-		ReferenceName: "refs/heads/Dev",
-	})
-
-	//CheckIfError(err)
-
-	// Getting the latest commit on the current branch
-	//Info("git log -1")
-
-	// ... retrieving the branch being pointed by HEAD
-	ref, err := r.Head()
-	//CheckIfError(err)
-
-	Info("Test from Here")
-	// ... retrieving the commit object
-	commit, err := r.CommitObject(ref.Hash())
-	//CheckIfError(err)
-	fmt.Println(commit.Hash)
+	//	var err error
+	//	app, err = newrelic.NewApplication(config)
+	//	if nil != err {
+	//		fmt.Println(err)
+	//		os.Exit(1)
+	//	}
 
 	httpListenAddr := flag.String("port", "8080", "HTTP Listen address.")
 
@@ -61,7 +32,8 @@ func main() {
 	log.Println("Starting server...")
 
 	// point / at the handler function
-	http.HandleFunc(newrelic.WrapHandleFunc(app, "/", handler))
+	//http.HandleFunc(newrelic.WrapHandleFunc(app, "/", handler))
+	http.HandleFunc("/", handler)
 
 	// serve static content from /static
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static/"))))
@@ -69,35 +41,6 @@ func main() {
 	log.Println("Server started. Listening on port " + *httpListenAddr)
 	log.Fatal(http.ListenAndServe(":"+*httpListenAddr, nil))
 
-}
-
-// CheckArgs should be used to ensure the right command line arguments are
-// passed before executing an example.
-func CheckArgs(arg ...string) {
-	if len(os.Args) < len(arg)+1 {
-		Warning("Usage: %s %s", os.Args[0], strings.Join(arg, " "))
-		os.Exit(1)
-	}
-}
-
-// CheckIfError should be used to naively panics if an error is not nil.
-func CheckIfError(err error) {
-	if err == nil {
-		return
-	}
-
-	fmt.Printf("\x1b[31;1m%s\x1b[0m\n", fmt.Sprintf("error: %s", err))
-	os.Exit(1)
-}
-
-// Info should be used to describe the example commands that are about to run.
-func Info(format string, args ...interface{}) {
-	fmt.Printf("\x1b[34;1m%s\x1b[0m\n", fmt.Sprintf(format, args...))
-}
-
-// Warning should be used to display a warning
-func Warning(format string, args ...interface{}) {
-	fmt.Printf("\x1b[36;1m%s\x1b[0m\n", fmt.Sprintf(format, args...))
 }
 
 const (
@@ -141,16 +84,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	release := os.Getenv("WORKFLOW_RELEASE")
-	// commit := os.Getenv("GIT_SHA")
-	GitCommit := os.Getenv("GIT_SHA")
+	commit := os.Getenv("GIT_SHA")
 	SourceVersion := os.Getenv("SourceVersion")
 	Namespace := os.Getenv("Namespace")
 
 	if release == "" {
 		release = "unknown"
 	}
-	if Gitcommit == "" {
-		Gitcommit = "not present"
+	if commit == "" {
+		commit = "not present"
 	}
 	if SourceVersion == "" {
 		SourceVersion = "not present"
@@ -159,6 +101,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		Namespace = "deis"
 	}
 
-	fmt.Fprintf(w, html, hostname, release, Gitcommit, SourceVersion, Namespace)
+	fmt.Fprintf(w, html, hostname, release, commit, SourceVersion, Namespace)
 
 }
