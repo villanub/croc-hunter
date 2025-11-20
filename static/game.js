@@ -1,1 +1,469 @@
-var canvasBg=document.getElementById("canvasBg");var contextBg=canvasBg.getContext("2d");var canvasJet=document.getElementById("canvasJet");var contextJet=canvasJet.getContext("2d");var canvasEnemy=document.getElementById("canvasEnemy");var contextEnemy=canvasEnemy.getContext("2d");var canvasHud=document.getElementById("canvasHud");var contextHud=canvasHud.getContext("2d");contextHud.fillStyle="hsla(0, 0%, 0%, 0.5)";contextHud.font="bold 20px Arial";var jet1=new Jet;var btnPlay=new Button(265,535,220,335);var gameWidth=canvasBg.width;var gameHeight=canvasBg.height;var mouseX=0;var mouseY=0;var isPlaying=false;var requestAnimFrame=window.requestAnimationFrame||window.webkitRequestAnimationFrame||window.mozRequestAnimationFrame||window.oRequestAnimationFrame||window.msRequestAnimationFrame||function(callback){window.setTimeout(callback,1e3/60)};var enemies=[];var imgSprite=new Image;imgSprite.src="/static/sprite.png";imgSprite.addEventListener("load",init,false);var bgDrawX1=0;var bgDrawX2=1600;function moveBg(){bgDrawX1-=5;bgDrawX2-=5;if(bgDrawX1<=-1600)bgDrawX1=1600;if(bgDrawX2<=-1600)bgDrawX2=1600;drawBg()}function init(){spawnEnemy(5);drawMenu();document.addEventListener("click",mouseClicked,false)}function playGame(){drawBg();startLoop();updateHud();document.addEventListener("keydown",checkKeyDown,false);document.addEventListener("keyup",checkKeyUp,false)}function spawnEnemy(numSpawns){for(var i=0;i<numSpawns;i++){enemies[enemies.length]=new Enemy}}function drawAllEnemies(){clearContextEnemy();for(var i=0;i<enemies.length;i++){enemies[i].draw()}}function loop(){if(isPlaying){moveBg();jet1.draw();drawAllEnemies();requestAnimFrame(loop)}}function startLoop(){isPlaying=true;loop()}function stopLoop(){isPlaying=false}function drawBg(){contextBg.clearRect(0,0,gameWidth,gameHeight);contextBg.drawImage(imgSprite,0,0,1600,gameHeight,bgDrawX1,0,1600,gameHeight);contextBg.drawImage(imgSprite,0,0,1600,gameHeight,bgDrawX2,0,1600,gameHeight)}function drawMenu(){var srcY=760;contextBg.drawImage(imgSprite,0,srcY,gameWidth,gameHeight,0,0,gameWidth,gameHeight)}function updateHud(){contextHud.clearRect(0,0,gameWidth,gameHeight);contextHud.fillText("Score: "+jet1.score,680,30)}function Jet(){this.srcX=0;this.srcY=510;this.drawX=200;this.drawY=200;this.noseX=this.drawX+100;this.noseY=this.drawY+30;this.width=144;this.height=74;this.speed=2;this.leftX=this.drawX;this.rightX=this.drawX+this.width;this.topY=this.drawY;this.bottomY=this.drawY+this.height;this.isUpKey=false;this.isRightKey=false;this.isDownKey=false;this.isLeftKey=false;this.isSpaceBar=false;this.isShooting=false;this.bullets=[];this.currentBullet=0;for(var i=0;i<20;i++)this.bullets[this.bullets.length]=new Bullet(this);this.score=0}Jet.prototype.draw=function(){clearContextJet();this.updateCoors();this.checkDirection();this.checkShooting();this.drawAllBullets();contextJet.drawImage(imgSprite,this.srcX,this.srcY,this.width,this.height,this.drawX,this.drawY,this.width,this.height)};Jet.prototype.updateCoors=function(){this.noseX=this.drawX+100;this.noseY=this.drawY+30;this.leftX=this.drawX;this.rightX=this.drawX+this.width;this.topY=this.drawY;this.bottomY=this.drawY+this.height};Jet.prototype.checkDirection=function(){if(this.isUpKey&&this.topY>0){this.drawY-=this.speed}if(this.isRightKey&&this.rightX<gameWidth){this.drawX+=this.speed}if(this.isDownKey&&this.bottomY<gameHeight){this.drawY+=this.speed}if(this.isLeftKey&&this.leftX>0){this.drawX-=this.speed}};Jet.prototype.drawAllBullets=function(){for(var i=0;i<this.bullets.length;i++){if(this.bullets[i].drawX>=0)this.bullets[i].draw();if(this.bullets[i].explosion.hasHit)this.bullets[i].explosion.draw()}};Jet.prototype.checkShooting=function(){if(this.isSpaceBar&&!this.isShooting){this.isShooting=true;this.bullets[this.currentBullet].fire(this.noseX,this.noseY);this.currentBullet++;if(this.currentBullet>=this.bullets.length)this.currentBullet=0}else if(!this.isSpaceBar){this.isShooting=false}};Jet.prototype.updateScore=function(points){this.score+=points;updateHud()};function clearContextJet(){contextJet.clearRect(0,0,gameWidth,gameHeight)}function Bullet(j){this.srcX=100;this.srcY=500;this.drawX=-20;this.drawY=0;this.width=18;this.height=4;this.speed=3;this.explosion=new Explosion;this.jet=j}Bullet.prototype.draw=function(){this.drawX+=this.speed;contextJet.drawImage(imgSprite,this.srcX,this.srcY,this.width,this.height,this.drawX,this.drawY,this.width,this.height);this.checkHitEnemy();if(this.drawX>gameWidth)this.recycle()};Bullet.prototype.recycle=function(){this.drawX=-20};Bullet.prototype.fire=function(noseX,noseY){this.drawX=noseX;this.drawY=noseY};Bullet.prototype.checkHitEnemy=function(){for(var i=0;i<enemies.length;i++){if(this.drawX>=enemies[i].drawX&&this.drawX<=enemies[i].drawX+enemies[i].width&&this.drawY>=enemies[i].drawY&&this.drawY<=enemies[i].drawY+enemies[i].height){this.explosion.drawX=enemies[i].drawX-this.explosion.width/2;this.explosion.drawY=enemies[i].drawY;this.explosion.hasHit=true;this.recycle();enemies[i].recycleEnemy();this.jet.updateScore(enemies[i].rewardPoints)}}};function Explosion(){this.srcX=742;this.srcY=495;this.drawX=0;this.drawY=0;this.width=60;this.height=55;this.currentFrame=0;this.totalFrames=10;this.hasHit=false}Explosion.prototype.draw=function(){if(this.currentFrame<=this.totalFrames){contextJet.drawImage(imgSprite,this.srcX,this.srcY,this.width,this.height,this.drawX,this.drawY,this.width,this.height);this.currentFrame++}else{this.hasHit=false;this.currentFrame=0}};function Enemy(){this.srcX=0;this.srcY=644;this.width=97;this.height=51;this.speed=2;this.drawX=Math.floor(Math.random()*1e3)+gameWidth;this.drawY=Math.floor(Math.random()*gameHeight)-this.height;this.rewardPoints=5}Enemy.prototype.draw=function(){this.drawX-=this.speed;contextEnemy.drawImage(imgSprite,this.srcX,this.srcY,this.width,this.height,this.drawX,this.drawY,this.width,this.height);this.checkEscaped()};Enemy.prototype.checkEscaped=function(){if(this.drawX+this.width<=0){this.recycleEnemy()}};Enemy.prototype.recycleEnemy=function(){this.drawX=Math.floor(Math.random()*1e3)+gameWidth;this.drawY=Math.floor(Math.random()*gameHeight)};function clearContextEnemy(){contextEnemy.clearRect(0,0,gameWidth,gameHeight)}function Button(xL,xR,yT,yB){this.xLeft=xL;this.xRight=xR;this.yTop=yT;this.yBottom=yB}Button.prototype.checkClicked=function(){return this.xLeft<=mouseX&&mouseX<=this.xRight&&this.yTop<=mouseY&&mouseY<=this.yBottom};function mouseClicked(e){mouseX=e.pageX-canvasBg.offsetLeft;mouseY=e.pageY-canvasBg.offsetTop;if(!isPlaying)if(btnPlay.checkClicked())playGame()}function checkKeyDown(e){var keyId=e.keyCode||e.which;if(keyId==38||keyId==87){jet1.isUpKey=true;e.preventDefault()}if(keyId==39||keyId==68){jet1.isRightKey=true;e.preventDefault()}if(keyId==40||keyId==83){jet1.isDownKey=true;e.preventDefault()}if(keyId==37||keyId==65){jet1.isLeftKey=true;e.preventDefault()}if(keyId==32){jet1.isSpaceBar=true;e.preventDefault()}}function checkKeyUp(e){var keyId=e.keyCode||e.which;if(keyId==38||keyId==87){jet1.isUpKey=false;e.preventDefault()}if(keyId==39||keyId==68){jet1.isRightKey=false;e.preventDefault()}if(keyId==40||keyId==83){jet1.isDownKey=false;e.preventDefault()}if(keyId==37||keyId==65){jet1.isLeftKey=false;e.preventDefault()}if(keyId==32){jet1.isSpaceBar=false;e.preventDefault()}}
+(() => {
+  const WIDTH = 960;
+  const HEIGHT = 540;
+  const LAYERS = {
+    background: document.getElementById("canvasBg").getContext("2d"),
+    enemies: document.getElementById("canvasEnemy").getContext("2d"),
+    player: document.getElementById("canvasJet").getContext("2d"),
+    hud: document.getElementById("canvasHud").getContext("2d"),
+  };
+
+  Object.values(LAYERS).forEach((ctx) => {
+    ctx.canvas.width = WIDTH;
+    ctx.canvas.height = HEIGHT;
+  });
+
+  const input = {
+    left: false,
+    right: false,
+    fire: false,
+    pause: false,
+  };
+
+  const colors = {
+    water: ["#0f274a", "#0d1c38", "#0a152d"],
+    shoreline: "#27406c",
+    croc: "#4ae3b5",
+    crocBelly: "#1fa36f",
+    projectile: "#ff9f43",
+    jet: "#d9e1ff",
+    jetAccent: "#4a90e3",
+    hud: "#e8f1ff",
+  };
+
+  const state = {
+    running: false,
+    paused: false,
+    gameOver: false,
+    elapsed: 0,
+    spawnTimer: 0,
+    spawnInterval: 1.6,
+    score: 0,
+    hits: 0,
+    shots: 0,
+    streak: 0,
+    bestStreak: 0,
+    hearts: 4,
+    wave: 1,
+    message: "Press ENTER or SPACE to begin",
+    harpoons: [],
+    crocs: [],
+    particles: [],
+  };
+
+  class Player {
+    constructor() {
+      this.x = WIDTH / 2;
+      this.y = 120;
+      this.speed = 240;
+      this.fireCooldown = 0;
+      this.fireRate = 0.28;
+    }
+
+    update(dt) {
+      const direction = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+      this.x += direction * this.speed * dt;
+      this.x = Math.max(60, Math.min(WIDTH - 60, this.x));
+
+      if (this.fireCooldown > 0) this.fireCooldown -= dt;
+      if (state.running && !state.paused && input.fire && this.fireCooldown <= 0) {
+        spawnHarpoon(this.x, this.y + 20);
+        this.fireCooldown = this.fireRate;
+      }
+    }
+
+    draw(ctx) {
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.fillStyle = colors.jet;
+      ctx.beginPath();
+      ctx.moveTo(0, -18);
+      ctx.quadraticCurveTo(32, 10, 0, 18);
+      ctx.quadraticCurveTo(-32, 10, 0, -18);
+      ctx.fill();
+      ctx.fillStyle = colors.jetAccent;
+      ctx.fillRect(-8, -14, 16, 28);
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.fillRect(-4, -10, 8, 16);
+      ctx.restore();
+    }
+  }
+
+  class Harpoon {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+      this.speed = 520;
+      this.active = true;
+    }
+
+    update(dt) {
+      this.y += this.speed * dt;
+      if (this.y > HEIGHT + 16) this.active = false;
+    }
+
+    draw(ctx) {
+      ctx.save();
+      ctx.strokeStyle = colors.projectile;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y - 12);
+      ctx.lineTo(this.x, this.y + 12);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  class Croc {
+    constructor() {
+      const fromLeft = Math.random() > 0.5;
+      this.y = 300 + Math.random() * 180;
+      this.x = fromLeft ? -80 : WIDTH + 80;
+      this.speed = 70 + Math.random() * (90 + state.wave * 15);
+      this.direction = fromLeft ? 1 : -1;
+      this.width = 90;
+      this.height = 26;
+      this.health = 1;
+      this.active = true;
+    }
+
+    update(dt) {
+      this.x += this.speed * this.direction * dt;
+      if (this.x < -140 || this.x > WIDTH + 140) {
+        this.active = false;
+        loseHeart();
+      }
+    }
+
+    draw(ctx) {
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.scale(this.direction, 1);
+      ctx.fillStyle = colors.croc;
+      ctx.beginPath();
+      ctx.moveTo(-40, 0);
+      ctx.quadraticCurveTo(-16, -16, 34, -8);
+      ctx.quadraticCurveTo(48, -4, 46, 0);
+      ctx.quadraticCurveTo(48, 4, 34, 8);
+      ctx.quadraticCurveTo(-16, 16, -40, 0);
+      ctx.fill();
+      ctx.fillStyle = colors.crocBelly;
+      ctx.fillRect(-14, -6, 32, 12);
+      ctx.fillStyle = "#0b1021";
+      ctx.beginPath();
+      ctx.arc(18, -6, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    hit() {
+      this.health -= 1;
+      if (this.health <= 0) {
+        this.active = false;
+        popSplash(this.x, this.y, colors.croc);
+        awardScore();
+      }
+    }
+  }
+
+  class Particle {
+    constructor(x, y, color) {
+      this.x = x;
+      this.y = y;
+      this.life = 0.7;
+      this.speed = 120 + Math.random() * 140;
+      this.angle = Math.random() * Math.PI * 2;
+      this.color = color;
+    }
+
+    update(dt) {
+      this.life -= dt;
+      this.x += Math.cos(this.angle) * this.speed * dt;
+      this.y += Math.sin(this.angle) * this.speed * dt;
+    }
+
+    draw(ctx) {
+      ctx.save();
+      ctx.globalAlpha = Math.max(this.life, 0);
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  const player = new Player();
+
+  const spawnHarpoon = (x, y) => {
+    state.harpoons.push(new Harpoon(x, y));
+    state.shots += 1;
+  };
+
+  const spawnCroc = () => {
+    state.crocs.push(new Croc());
+  };
+
+  const popSplash = (x, y, color) => {
+    for (let i = 0; i < 18; i += 1) {
+      state.particles.push(new Particle(x, y, color));
+    }
+  };
+
+  const awardScore = () => {
+    const combo = 1 + state.streak * 0.05;
+    const waveBonus = 1 + state.wave * 0.15;
+    state.score += Math.round(25 * combo * waveBonus);
+    state.hits += 1;
+    state.streak += 1;
+    state.bestStreak = Math.max(state.bestStreak, state.streak);
+    maybeAdvanceWave();
+    state.message = `Streak ${state.streak}x — keep the bayou clean!`;
+  };
+
+  const loseHeart = () => {
+    state.hearts -= 1;
+    state.streak = 0;
+    state.message = "A croc slipped through!";
+    if (state.hearts <= 0) {
+      state.gameOver = true;
+      state.running = false;
+      state.message = `You held out for ${state.wave} waves — press R to retry`;
+    }
+  };
+
+  const maybeAdvanceWave = () => {
+    const newWave = 1 + Math.floor(state.hits / 10);
+    if (newWave > state.wave) {
+      state.wave = newWave;
+      state.spawnInterval = Math.max(0.65, 1.6 - state.wave * 0.08);
+      state.message = `Wave ${state.wave}! The swamp is boiling.`;
+    }
+  };
+
+  const resetGame = () => {
+    state.running = true;
+    state.paused = false;
+    state.gameOver = false;
+    state.elapsed = 0;
+    state.spawnTimer = 0;
+    state.spawnInterval = 1.6;
+    state.score = 0;
+    state.hits = 0;
+    state.shots = 0;
+    state.streak = 0;
+    state.bestStreak = 0;
+    state.hearts = 4;
+    state.wave = 1;
+    state.message = "Wave 1 — keep the crocs away";
+    state.harpoons = [];
+    state.crocs = [];
+    state.particles = [];
+  };
+
+  const accuracy = () => {
+    if (state.shots === 0) return 0;
+    return Math.round((state.hits / state.shots) * 100);
+  };
+
+  const drawBackground = () => {
+    const ctx = LAYERS.background;
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    const gradient = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+    gradient.addColorStop(0, colors.water[0]);
+    gradient.addColorStop(0.5, colors.water[1]);
+    gradient.addColorStop(1, colors.water[2]);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    ctx.fillStyle = colors.shoreline;
+    ctx.fillRect(0, HEIGHT - 90, WIDTH, 120);
+
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 6; i += 1) {
+      ctx.beginPath();
+      const waveY = 120 + i * 60;
+      ctx.moveTo(0, waveY);
+      for (let x = 0; x <= WIDTH; x += 24) {
+        const y = waveY + Math.sin((x / 40) + i) * 5;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  };
+
+  const drawCrocs = () => {
+    const ctx = LAYERS.enemies;
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    state.crocs.forEach((croc) => croc.draw(ctx));
+    state.particles.forEach((p) => p.draw(ctx));
+  };
+
+  const drawPlayer = () => {
+    const ctx = LAYERS.player;
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    state.harpoons.forEach((harpoon) => harpoon.draw(ctx));
+    player.draw(ctx);
+  };
+
+  const drawHud = () => {
+    const ctx = LAYERS.hud;
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    ctx.fillRect(0, 0, WIDTH, 64);
+    ctx.fillStyle = colors.hud;
+    ctx.font = "16px 'Inter', 'Segoe UI', sans-serif";
+    ctx.textBaseline = "top";
+
+    ctx.fillText(`Score: ${state.score}`, 22, 18);
+    ctx.fillText(`Wave: ${state.wave}`, 160, 18);
+    ctx.fillText(`Accuracy: ${accuracy()}%`, 260, 18);
+    ctx.fillText(`Streak: ${state.streak} (best ${state.bestStreak})`, 420, 18);
+
+    for (let i = 0; i < state.hearts; i += 1) {
+      const x = WIDTH - 26 - i * 26;
+      ctx.fillStyle = colors.accent;
+      ctx.beginPath();
+      ctx.arc(x, 26, 10, 0, Math.PI * 2);
+      ctx.arc(x + 12, 26, 10, 0, Math.PI * 2);
+      ctx.moveTo(x - 6, 30);
+      ctx.lineTo(x + 12, 46);
+      ctx.lineTo(x + 30, 30);
+      ctx.fill();
+    }
+
+    ctx.textBaseline = "middle";
+    ctx.font = "22px 'Inter', 'Segoe UI', sans-serif";
+    ctx.fillStyle = "rgba(232,241,255,0.9)";
+    ctx.fillText(state.message, 22, HEIGHT - 30);
+
+    if (!state.running) {
+      ctx.fillStyle = "rgba(11,16,33,0.75)";
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = colors.hud;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "32px 'Inter', 'Segoe UI', sans-serif";
+      ctx.fillText("Croc Hunter: Tidal Revenge", WIDTH / 2, HEIGHT / 2 - 24);
+      ctx.font = "18px 'Inter', 'Segoe UI', sans-serif";
+      ctx.fillText("Press ENTER or SPACE to begin", WIDTH / 2, HEIGHT / 2 + 12);
+      ctx.fillText("Move with A/D or arrows, fire with SPACE", WIDTH / 2, HEIGHT / 2 + 40);
+    } else if (state.paused) {
+      ctx.fillStyle = "rgba(11,16,33,0.65)";
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = colors.hud;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "28px 'Inter', 'Segoe UI', sans-serif";
+      ctx.fillText("Paused — press P to resume", WIDTH / 2, HEIGHT / 2);
+    } else if (state.gameOver) {
+      ctx.fillStyle = "rgba(11,16,33,0.7)";
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = colors.hud;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "30px 'Inter', 'Segoe UI', sans-serif";
+      ctx.fillText("The bayou is overrun!", WIDTH / 2, HEIGHT / 2 - 10);
+      ctx.font = "18px 'Inter', 'Segoe UI', sans-serif";
+      ctx.fillText(`Final score ${state.score} — best streak ${state.bestStreak}`, WIDTH / 2, HEIGHT / 2 + 20);
+      ctx.fillText("Press R to restart", WIDTH / 2, HEIGHT / 2 + 48);
+    }
+  };
+
+  const updateEntities = (dt) => {
+    player.update(dt);
+    state.harpoons.forEach((harpoon) => harpoon.update(dt));
+    state.crocs.forEach((croc) => croc.update(dt));
+    state.particles.forEach((p) => p.update(dt));
+
+    state.harpoons = state.harpoons.filter((h) => h.active);
+    state.crocs = state.crocs.filter((c) => c.active);
+    state.particles = state.particles.filter((p) => p.life > 0);
+
+    state.crocs.forEach((croc) => {
+      state.harpoons.forEach((harpoon) => {
+        if (!croc.active || !harpoon.active) return;
+        const withinX = Math.abs(croc.x - harpoon.x) < 48;
+        const withinY = Math.abs(croc.y - harpoon.y) < 24;
+        if (withinX && withinY) {
+          croc.hit();
+          harpoon.active = false;
+        }
+      });
+    });
+  };
+
+  const update = (dt) => {
+    if (!state.running || state.paused || state.gameOver) return;
+
+    state.elapsed += dt;
+    state.spawnTimer += dt;
+
+    const targetInterval = Math.max(0.6, state.spawnInterval - state.wave * 0.01);
+    if (state.spawnTimer >= targetInterval) {
+      spawnCroc();
+      state.spawnTimer = 0;
+    }
+
+    updateEntities(dt);
+  };
+
+  const render = () => {
+    drawCrocs();
+    drawPlayer();
+    drawHud();
+  };
+
+  const loop = (timestamp) => {
+    if (!state.lastTime) state.lastTime = timestamp;
+    const dt = Math.min((timestamp - state.lastTime) / 1000, 0.1);
+    state.lastTime = timestamp;
+
+    update(dt);
+    render();
+    requestAnimationFrame(loop);
+  };
+
+  const bindInput = () => {
+    const setKey = (key, isDown) => {
+      if (key === "ArrowLeft" || key === "a") input.left = isDown;
+      if (key === "ArrowRight" || key === "d") input.right = isDown;
+      if (key === " " || key === "Spacebar") input.fire = isDown;
+      if (key === "p") input.pause = isDown;
+    };
+
+    window.addEventListener("keydown", (event) => {
+      setKey(event.key, true);
+
+      if (event.key === "Enter" || event.key === " ") {
+        if (!state.running || state.gameOver) {
+          resetGame();
+        }
+      }
+
+      if (event.key.toLowerCase() === "p" && state.running && !state.gameOver) {
+        state.paused = !state.paused;
+        state.message = state.paused ? "Paused" : "Back in the fight";
+      }
+
+      if (event.key.toLowerCase() === "r") {
+        resetGame();
+      }
+    });
+
+    window.addEventListener("keyup", (event) => setKey(event.key, false));
+
+    window.addEventListener("blur", () => {
+      if (state.running) {
+        state.paused = true;
+        state.message = "Paused";
+      }
+    });
+  };
+
+  drawBackground();
+  bindInput();
+  render();
+  requestAnimationFrame(loop);
+})();

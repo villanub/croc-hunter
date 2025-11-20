@@ -1,11 +1,12 @@
-FROM golang
-ENV PORT 8080
-EXPOSE 8080
+FROM node:20-alpine
 
-WORKDIR /go/src/app
+ENV PORT 8080
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
 COPY . .
 
-RUN go get -d -v ./...
-RUN go install -v ./...
-
-CMD ["app"]
+EXPOSE 8080
+CMD ["npm", "start"]
