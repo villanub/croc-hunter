@@ -1,0 +1,13 @@
+{
+  "name": "croc-hunter",
+  "version": "1.0.0",
+  "description": "Croc Hunter game server",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "lint": "node --check server.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {}
+}
