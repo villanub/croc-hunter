@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Croc Hunter</title>
+    <link rel="stylesheet" href="./static/game.css" />
+    <link rel="icon" type="image/png" href="./static/favicon-16x16.png" sizes="16x16" />
+    <link rel="icon" type="image/png" href="./static/favicon-32x32.png" sizes="32x32" />
+  </head>
+  <body>
+    <main class="wrapper">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Croc Hunter</p>
+          <h1>The bayou is back and meaner than ever</h1>
+          <p class="lede">Dodge, dive and harpoon your way through waves of cranky crocs. Rack up streaks, keep the coast safe, and see how long you can survive the onslaught.</p>
+        </div>
+        <div class="pill" role="status" aria-live="polite">
+          <strong class="label">Status</strong>
+          <span id="statusText" class="value">Press ENTER or SPACE to begin</span>
+        </div>
+      </header>
+
+      <section class="canvas-stack" aria-label="Croc Hunter game board">
+        <canvas id="canvasBg" width="960" height="540"></canvas>
+        <canvas id="canvasEnemy" width="960" height="540"></canvas>
+        <canvas id="canvasJet" width="960" height="540"></canvas>
+        <canvas id="canvasHud" width="960" height="540"></canvas>
+      </section>
+
+      <section class="touch-controls" aria-label="Touch controls">
+        <button id="btnLeft" type="button">◀ Left</button>
+        <button id="btnFire" type="button">Harpoon</button>
+        <button id="btnRight" type="button">Right ▶</button>
+        <button id="btnPause" type="button">Pause / Resume</button>
+      </section>
+
+      <section class="details">
+        <div class="card">
+          <h2>Play controls</h2>
+          <ul>
+            <li><strong>Move</strong> with <kbd>A</kbd>/<kbd>D</kbd> or <kbd>Left</kbd>/<kbd>Right</kbd></li>
+            <li><strong>Harpoon</strong> with <kbd>Space</kbd> or <kbd>Tap Harpoon</kbd></li>
+            <li><strong>Pause</strong> with <kbd>P</kbd> or <kbd>Pause / Resume</kbd></li>
+            <li><strong>Restart</strong> with <kbd>R</kbd> after a wipeout</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Build details</h2>
+          <p><strong>Hostname:</strong> github-pages</p>
+          <p><strong>Release:</strong> static-site</p>
+          <p><strong>Commit:</strong> deployed-asset</p>
+          <p><strong>Powered By:</strong> GitHub Pages</p>
+        </div>
+      </section>
+    </main>
+    <script src="./static/game.js"></script>
+  </body>
+</html>

@@ -18,6 +18,17 @@ Croc Hunter is a simple arcade-style web game and demo application.
 
 3. Open http://localhost:8080 to play the game.
 
+## Play on GitHub Pages
+
+This repo includes a static entry page (`index.html`) and a GitHub Actions workflow that deploys to GitHub Pages on every push to `main`.
+
+1. In your GitHub repository settings, open **Pages**.
+2. Set **Source** to **GitHub Actions**.
+3. Push to `main` (or manually run the **Deploy static game to GitHub Pages** workflow).
+4. Open the generated Pages URL to play the game.
+
+The hosted Pages build includes mobile-friendly on-screen controls as well as keyboard controls.
+
 The server honors the following environment variables when rendering the landing page:
 
 - `WORKFLOW_RELEASE` – Release identifier to display.

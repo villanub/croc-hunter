@@ -19,6 +19,7 @@
     fire: false,
     pause: false,
   };
+  const statusText = document.getElementById("statusText");
 
   const colors = {
     water: ["#0f274a", "#0d1c38", "#0a152d"],
@@ -49,6 +50,12 @@
     harpoons: [],
     crocs: [],
     particles: [],
+  };
+
+  const syncStatusText = () => {
+    if (statusText) {
+      statusText.textContent = state.message;
+    }
   };
 
   class Player {
@@ -219,6 +226,7 @@
     state.bestStreak = Math.max(state.bestStreak, state.streak);
     maybeAdvanceWave();
     state.message = `Streak ${state.streak}x — keep the bayou clean!`;
+    syncStatusText();
   };
 
   const loseHeart = () => {
@@ -227,9 +235,9 @@
     state.message = "A croc slipped through!";
     if (state.hearts <= 0) {
       state.gameOver = true;
-      state.running = false;
       state.message = `You held out for ${state.wave} waves — press R to retry`;
     }
+    syncStatusText();
   };
 
   const maybeAdvanceWave = () => {
@@ -238,6 +246,7 @@
       state.wave = newWave;
       state.spawnInterval = Math.max(0.65, 1.6 - state.wave * 0.08);
       state.message = `Wave ${state.wave}! The swamp is boiling.`;
+      syncStatusText();
     }
   };
 
@@ -259,6 +268,7 @@
     state.harpoons = [];
     state.crocs = [];
     state.particles = [];
+    syncStatusText();
   };
 
   const accuracy = () => {
@@ -426,14 +436,19 @@
   };
 
   const bindInput = () => {
+    const isGameKey = (key) =>
+      ["ArrowLeft", "ArrowRight", "a", "d", " ", "Spacebar", "Enter", "p", "r"].includes(key);
+
     const setKey = (key, isDown) => {
-      if (key === "ArrowLeft" || key === "a") input.left = isDown;
-      if (key === "ArrowRight" || key === "d") input.right = isDown;
+      const lowered = key.toLowerCase();
+      if (key === "ArrowLeft" || lowered === "a") input.left = isDown;
+      if (key === "ArrowRight" || lowered === "d") input.right = isDown;
       if (key === " " || key === "Spacebar") input.fire = isDown;
-      if (key === "p") input.pause = isDown;
+      if (lowered === "p") input.pause = isDown;
     };
 
     window.addEventListener("keydown", (event) => {
+      if (isGameKey(event.key)) event.preventDefault();
       setKey(event.key, true);
 
       if (event.key === "Enter" || event.key === " ") {
@@ -445,6 +460,7 @@
       if (event.key.toLowerCase() === "p" && state.running && !state.gameOver) {
         state.paused = !state.paused;
         state.message = state.paused ? "Paused" : "Back in the fight";
+        syncStatusText();
       }
 
       if (event.key.toLowerCase() === "r") {
@@ -452,18 +468,58 @@
       }
     });
 
-    window.addEventListener("keyup", (event) => setKey(event.key, false));
+    window.addEventListener("keyup", (event) => {
+      if (isGameKey(event.key)) event.preventDefault();
+      setKey(event.key, false);
+    });
 
     window.addEventListener("blur", () => {
       if (state.running) {
         state.paused = true;
         state.message = "Paused";
+        syncStatusText();
       }
     });
+
+    const holdButton = (id, prop) => {
+      const button = document.getElementById(id);
+      if (!button) return;
+      const press = (e) => {
+        e.preventDefault();
+        input[prop] = true;
+      };
+      const release = (e) => {
+        e.preventDefault();
+        input[prop] = false;
+      };
+      button.addEventListener("pointerdown", press);
+      button.addEventListener("pointerup", release);
+      button.addEventListener("pointerleave", release);
+      button.addEventListener("pointercancel", release);
+    };
+
+    holdButton("btnLeft", "left");
+    holdButton("btnRight", "right");
+    holdButton("btnFire", "fire");
+
+    const pauseButton = document.getElementById("btnPause");
+    if (pauseButton) {
+      pauseButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        if (!state.running || state.gameOver) {
+          resetGame();
+          return;
+        }
+        state.paused = !state.paused;
+        state.message = state.paused ? "Paused" : "Back in the fight";
+        syncStatusText();
+      });
+    }
   };
 
   drawBackground();
   bindInput();
+  syncStatusText();
   render();
   requestAnimationFrame(loop);
 })();

@@ -24,9 +24,9 @@ function renderPage(hostname, release, commit, poweredBy) {
                                         <h1>The bayou is back and meaner than ever</h1>
                                         <p class="lede">Dodge, dive and harpoon your way through waves of cranky crocs. Rack up streaks, keep the coast safe, and see how long you can survive the onslaught.</p>
                                 </div>
-                                <div class="pill">
+                                <div class="pill" role="status" aria-live="polite">
                                         <strong class="label">Status</strong>
-                                        <span class="value">Press ENTER or SPACE to begin</span>
+                                        <span id="statusText" class="value">Press ENTER or SPACE to begin</span>
                                 </div>
                         </header>
                         <section class="canvas-stack">
@@ -35,13 +35,19 @@ function renderPage(hostname, release, commit, poweredBy) {
                                 <canvas id="canvasJet" width="960" height="540"></canvas>
                                 <canvas id="canvasHud" width="960" height="540"></canvas>
                         </section>
+                        <section class="touch-controls" aria-label="Touch controls">
+                                <button id="btnLeft" type="button">◀ Left</button>
+                                <button id="btnFire" type="button">Harpoon</button>
+                                <button id="btnRight" type="button">Right ▶</button>
+                                <button id="btnPause" type="button">Pause / Resume</button>
+                        </section>
                         <section class="details">
                                 <div class="card">
                                         <h2>Play controls</h2>
                                         <ul>
                                                 <li><strong>Move</strong> with <kbd>A</kbd>/<kbd>D</kbd> or <kbd>Left</kbd>/<kbd>Right</kbd></li>
-                                                <li><strong>Harpoon</strong> with <kbd>Space</kbd></li>
-                                                <li><strong>Pause</strong> with <kbd>P</kbd></li>
+                                                <li><strong>Harpoon</strong> with <kbd>Space</kbd> or <kbd>Tap Harpoon</kbd></li>
+                                                <li><strong>Pause</strong> with <kbd>P</kbd> or <kbd>Pause / Resume</kbd></li>
                                                 <li><strong>Restart</strong> with <kbd>R</kbd> after a wipeout</li>
                                         </ul>
                                 </div>
