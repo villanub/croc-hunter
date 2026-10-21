@@ -1,5 +1,28 @@
 const { test, expect } = require("@playwright/test");
 
+test("river scenery moves during travel and freezes on pause", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.goto("/");
+  await page.getByRole("button", { name: "Start patrol" }).click();
+  const bankPixels = () =>
+    page.locator("#game").evaluate((canvas) => {
+      const pixels = canvas.getContext("2d").getImageData(8, 200, 24, 100).data;
+      return Array.from(pixels).join(",");
+    });
+  const initial = await bankPixels();
+  await page.clock.runFor(1500);
+  expect(await bankPixels()).not.toBe(initial);
+  await expect(page.locator("#distance")).not.toHaveText("0 m DOWNRIVER");
+  await page.keyboard.press("p");
+  const paused = await bankPixels();
+  const distance = await page.locator("#distance").textContent();
+  await page.clock.runFor(1000);
+  expect(await bankPixels()).toBe(paused);
+  await expect(page.locator("#distance")).toHaveText(distance);
+});
+
 test("visible board, start, pause, resume, and tab safety", async ({
   page,
 }, info) => {

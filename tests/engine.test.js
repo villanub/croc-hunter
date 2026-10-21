@@ -10,7 +10,12 @@ test("start and retry reset the entire patrol, including player and cooldown", (
   assert.notEqual(game.player.x, 480);
   game.start();
   assert.equal(game.difficulty, "hard");
-  assert.deepEqual(game.player, { x: 480, y: 110, cooldown: 0 });
+  assert.deepEqual(game.player, {
+    x: 480,
+    y: 110,
+    cooldown: 0,
+    aim: Math.PI / 2,
+  });
   assert.equal(game.shots, 0);
   assert.equal(game.lives, 4);
   assert.equal(game.crocs.length, 0);
@@ -34,8 +39,16 @@ test("harpoons score one catch each, advance waves and apply streak multipliers"
   game.start();
   game.spawnTimer = 100;
   for (let i = 0; i < 8; i++) {
-    game.crocs.push({ x: 480, y: 250, active: true, direction: 1, speed: 0 });
-    game.harpoons.push({ x: 480, y: 230, active: true });
+    game.crocs.push({
+      x: 480,
+      y: 250,
+      active: true,
+      vx: 0,
+      vy: 0,
+      angle: 0,
+      speed: 0,
+    });
+    game.harpoons.push({ x: 480, y: 230, vx: 0, vy: 620, active: true });
     game.step(1 / 30);
   }
   assert.equal(game.hits, 8);
@@ -46,16 +59,18 @@ test("harpoons score one catch each, advance waves and apply streak multipliers"
   assert.equal(game.drainEvents().filter((e) => e.type === "wave").length, 1);
 });
 
-test("four escapes end play with nonnegative lives and cannot award later points", () => {
+test("four collisions end play with nonnegative lives and cannot award later points", () => {
   const game = new Game();
   game.start();
   game.spawnTimer = 100;
   game.streak = 5;
   game.crocs = Array.from({ length: 7 }, () => ({
-    x: 1060,
-    y: 300,
+    x: 480,
+    y: 110,
     active: true,
-    direction: 1,
+    vx: 0,
+    vy: -1,
+    angle: -Math.PI / 2,
     speed: 1,
   }));
   game.step(1 / 60);
@@ -101,4 +116,98 @@ test("transient zero or invalid layout dimensions cannot corrupt positions", () 
   game.resize(540);
   assert.equal(game.player.x, 270);
   assert.ok(Number.isFinite(game.crocs[0].x));
+});
+
+test("river travel advances only during play and resets for a new patrol", () => {
+  const game = new Game();
+  game.start();
+  game.spawnTimer = 100;
+  for (let i = 0; i < 60; i++) game.step(1 / 60);
+  assert.ok(Math.abs(game.distance - 72) < 0.001);
+  game.pause();
+  game.step(1 / 30);
+  assert.ok(Math.abs(game.distance - 72) < 0.001);
+  game.start();
+  assert.equal(game.distance, 0);
+});
+
+test("crocs enter from both banks and downstream, facing their committed approach", () => {
+  for (const [random, entry] of [
+    [0.1, "left"],
+    [0.5, "right"],
+    [0.9, "downstream"],
+  ]) {
+    const game = new Game(() => random);
+    game.start();
+    game.spawnTimer = 100;
+    game.spawn();
+    const c = game.crocs[0];
+    assert.equal(c.entry, entry);
+    assert.ok(c.vy < 0);
+    assert.equal(Math.sign(c.vx), Math.sign(game.player.x - c.x));
+    assert.equal(c.angle, Math.atan2(c.vy, c.vx));
+    const startDistance = Math.hypot(c.x - game.player.x, c.y - game.player.y);
+    const vx = c.vx,
+      vy = c.vy;
+    game.step(1 / 30);
+    assert.ok(
+      Math.hypot(c.x - game.player.x, c.y - game.player.y) < startDistance,
+    );
+    game.step(1 / 30, { right: true });
+    assert.equal(c.vx, vx);
+    assert.equal(c.vy, vy);
+  }
+});
+
+test("dodged crocs leave the patrol without hull damage or breaking a streak", () => {
+  const game = new Game();
+  game.start();
+  game.spawnTimer = 100;
+  game.streak = 3;
+  game.crocs.push({
+    x: 100,
+    y: -99,
+    vx: 0,
+    vy: -120,
+    angle: -Math.PI / 2,
+    active: true,
+  });
+  game.step(1 / 30);
+  assert.equal(game.crocs.length, 0);
+  assert.equal(game.lives, 4);
+  assert.equal(game.streak, 3);
+  assert.equal(game.drainEvents().length, 0);
+});
+
+test("swept harpoons hit rotated and moving crocs", () => {
+  for (const angle of [-Math.PI / 2, -Math.PI / 4, -Math.PI * 0.8]) {
+    const game = new Game();
+    game.start();
+    game.spawnTimer = 100;
+    game.crocs.push({
+      x: 480,
+      y: 250,
+      vx: Math.cos(angle) * 100,
+      vy: Math.sin(angle) * 100,
+      angle,
+      active: true,
+    });
+    game.harpoons.push({ x: 480, y: 220, vx: 0, vy: 620, active: true });
+    game.step(1 / 30);
+    assert.equal(game.hits, 1);
+    assert.equal(game.lives, 4);
+  }
+});
+
+test("the turret can intercept approaches from every entry direction", () => {
+  for (const random of [0.1, 0.5, 0.9]) {
+    const game = new Game(() => random);
+    game.start();
+    game.spawnTimer = 100;
+    game.spawn();
+    for (let i = 0; i < 600 && game.hits === 0; i++)
+      game.step(1 / 60, { fire: true });
+    assert.equal(game.hits, 1);
+    assert.equal(game.lives, 4);
+  }
 });

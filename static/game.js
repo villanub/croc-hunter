@@ -79,6 +79,7 @@
     toastTime = 2.2;
   }
   function syncStats() {
+    $("distance").textContent = `${Math.floor(game.distance / 10)} m DOWNRIVER`;
     $("score").textContent = String(game.score).padStart(5, "0");
     $("best").textContent = String(best).padStart(5, "0");
     $("wave").textContent = String(game.wave).padStart(2, "0");
@@ -126,7 +127,7 @@
     }
     accumulator = 0;
     $("status").textContent =
-      "Patrol in progress. Catch crocs before they escape.";
+      "Heading downriver. Steer clear of crocs or line up a harpoon.";
     showOverlay();
     syncStats();
     $("playfield").focus({ preventScroll: true });
@@ -156,11 +157,8 @@
       seed = (seed * 16807) % 2147483647;
       return seed / 2147483647;
     };
-    const gradient = bg.createLinearGradient(0, 0, 0, HEIGHT);
-    gradient.addColorStop(0, "#315c49");
-    gradient.addColorStop(0.48, "#234f43");
-    gradient.addColorStop(1, "#163b35");
-    bg.fillStyle = gradient;
+    // A repeating river tile: matching bank edges and water color avoid a seam.
+    bg.fillStyle = "#295345";
     bg.fillRect(0, 0, w, HEIGHT);
     // Dark reed banks frame the play area; the open central channel stays readable.
     for (const side of [0, 1]) {
@@ -168,7 +166,8 @@
       bg.beginPath();
       bg.moveTo(side ? w : 0, 0);
       for (let y = 0; y <= HEIGHT; y += 20) {
-        bg.lineTo(side ? w - 20 - random() * 18 : 20 + random() * 18, y);
+        const bank = 27 + Math.sin((y / HEIGHT) * Math.PI * 2) * 6;
+        bg.lineTo(side ? w - bank : bank, y);
       }
       bg.lineTo(side ? w : 0, HEIGHT);
       bg.fill();
@@ -234,7 +233,7 @@
   function drawCroc(c, time) {
     ctx.save();
     ctx.translate(c.x, c.y);
-    ctx.scale(c.direction, 1);
+    ctx.rotate(c.angle);
     const wiggle = reducedMotion.matches ? 0 : Math.sin(time * 6 + c.phase) * 4;
     ctx.strokeStyle = "#a9cd9a26";
     ctx.lineWidth = 1;
@@ -303,11 +302,22 @@
       y + (reducedMotion.matches ? 0 : Math.sin(time * 3) * 1.6),
     );
     ctx.strokeStyle = "#d6e4c637";
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 6; i++) {
+      const trail = (i / 6 + time * 0.8) % 1;
+      ctx.globalAlpha = (1 - trail) * 0.7;
       ctx.beginPath();
-      ctx.ellipse(0, -26 - i * 10, 13 + i * 4, 4, 0, Math.PI, Math.PI * 2);
+      ctx.ellipse(
+        0,
+        -30 - trail * 90,
+        10 + trail * 28,
+        4 + trail * 6,
+        0,
+        Math.PI,
+        Math.PI * 2,
+      );
       ctx.stroke();
     }
+    ctx.globalAlpha = 1;
     ellipse(ctx, 5, 5, 24, 43, "#082d2c66");
     ctx.fillStyle = "#d4c79f";
     ctx.beginPath();
@@ -334,19 +344,31 @@
     ellipse(ctx, 0, -5, 13, 6, "#e4d4a7");
     ellipse(ctx, 0, -7, 8, 6, "#b7a675");
     ctx.fillStyle = "#34483c";
+    ctx.save();
+    ctx.rotate(game.player.aim - Math.PI / 2);
     ctx.fillRect(-3, 13, 6, 27);
     ctx.fillStyle = "#e9e2c5";
     ctx.fillRect(-2, 34, 4, 9);
+    ctx.restore();
     ctx.restore();
   }
   function draw() {
     const time = reducedMotion.matches ? 0 : game.elapsed;
     ctx.clearRect(0, 0, game.width, HEIGHT);
-    ctx.drawImage(scenery, 0, 0);
+    // Camera follows the southbound boat; the world passes upstream beneath it.
+    const riverOffset = reducedMotion.matches ? 0 : game.distance % HEIGHT;
+    ctx.drawImage(scenery, 0, -riverOffset);
+    ctx.drawImage(scenery, 0, HEIGHT - riverOffset);
+    const shade = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+    shade.addColorStop(0, "#122f2200");
+    shade.addColorStop(1, "#0c302b66");
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 0, game.width, HEIGHT);
     ctx.strokeStyle = "#a5c8af13";
     ctx.lineWidth = 1;
     for (let row = 0; row < 12; row++) {
-      const y = row * 47 + 12;
+      const y =
+        ((((row * 47 + 12 - riverOffset * 0.7) % 564) + 564) % 564) - 12;
       for (let col = 0; col < game.width / 130; col++) {
         const x = col * 130 + Math.sin(row) * 28;
         ctx.beginPath();
@@ -362,23 +384,27 @@
     }
     if (game.mode === "ready") {
       [
-        { x: game.width * 0.16, y: 340, direction: 1, phase: 0 },
-        { x: game.width * 0.83, y: 210, direction: -1, phase: 2 },
-        { x: game.width * 0.81, y: 450, direction: 1, phase: 1 },
+        { x: game.width * 0.16, y: 340, angle: -0.5, phase: 0 },
+        { x: game.width * 0.83, y: 210, angle: -2.7, phase: 2 },
+        { x: game.width * 0.81, y: 450, angle: -Math.PI / 2, phase: 1 },
       ].forEach((c) => drawCroc(c, time));
     }
     game.crocs.forEach((c) => drawCroc(c, time));
     drawBoat(time);
     for (const h of game.harpoons) {
+      ctx.save();
+      ctx.translate(h.x, h.y);
+      ctx.rotate(h.angle - Math.PI / 2);
       ctx.strokeStyle = "#f0d491";
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(h.x, h.y - 20);
-      ctx.lineTo(h.x, h.y + 8);
-      ctx.moveTo(h.x - 5, h.y + 2);
-      ctx.lineTo(h.x, h.y + 9);
-      ctx.lineTo(h.x + 5, h.y + 2);
+      ctx.moveTo(0, -20);
+      ctx.lineTo(0, 8);
+      ctx.moveTo(-5, 2);
+      ctx.lineTo(0, 9);
+      ctx.lineTo(5, 2);
       ctx.stroke();
+      ctx.restore();
     }
     for (const p of particles) {
       ctx.globalAlpha = Math.max(0, p.life * 1.5);
@@ -427,10 +453,10 @@
         );
         tone(900, 0.3);
       }
-      if (event.type === "escape") {
+      if (event.type === "damage") {
         flash = 0.6;
         tone(130, 0.24, "sawtooth", 0.025);
-        toast("Croc escaped · Hull damaged");
+        toast("Croc hit the boat · Hull damaged");
       }
       if (event.type === "over") {
         saveBest();
@@ -472,6 +498,7 @@
       }
     }
     draw();
+    $("distance").textContent = `${Math.floor(game.distance / 10)} m DOWNRIVER`;
     requestAnimationFrame(frame);
   }
   const gameKeys = [
