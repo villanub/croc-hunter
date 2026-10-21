@@ -87,6 +87,8 @@ test("real shots score and personal best survives reload", async ({
   await page.keyboard.down("Space");
   await expect(page.locator("#score")).not.toHaveText(best, { timeout: 5000 });
   await page.keyboard.up("Space");
+  // Freeze in-flight shots before taking the persistence snapshot.
+  await page.keyboard.press("p");
   const savedBest = await page.locator("#best").textContent();
   await page.reload();
   await expect(page.locator("#best")).toHaveText(savedBest);
