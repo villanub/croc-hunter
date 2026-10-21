@@ -1,525 +1,594 @@
 (() => {
-  const WIDTH = 960;
-  const HEIGHT = 540;
-  const LAYERS = {
-    background: document.getElementById("canvasBg").getContext("2d"),
-    enemies: document.getElementById("canvasEnemy").getContext("2d"),
-    player: document.getElementById("canvasJet").getContext("2d"),
-    hud: document.getElementById("canvasHud").getContext("2d"),
+  "use strict";
+  const { Game, HEIGHT } = window.CrocGame;
+  const game = new Game();
+  const $ = (id) => document.getElementById(id);
+  const canvas = $("game");
+  const ctx = canvas.getContext("2d");
+  const scenery = document.createElement("canvas");
+  const bg = scenery.getContext("2d");
+  const keys = new Set();
+  const pointers = new Map();
+  const particles = [];
+  const labels = [];
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let best = 0;
+  let sound = false;
+  let audio;
+  let toastTime = 0;
+  let flash = 0;
+  let lastTime = 0;
+  let accumulator = 0;
+  const storageKey = () => `croc-hunter.best.${game.difficulty}`;
+  const readBest = () => {
+    try {
+      best = Math.max(
+        0,
+        Math.min(999999999, Number(localStorage.getItem(storageKey())) || 0),
+      );
+    } catch {
+      best = 0;
+    }
   };
-
-  Object.values(LAYERS).forEach((ctx) => {
-    ctx.canvas.width = WIDTH;
-    ctx.canvas.height = HEIGHT;
+  const saveBest = () => {
+    if (game.score <= best) return;
+    best = game.score;
+    try {
+      localStorage.setItem(storageKey(), String(best));
+    } catch {
+      /* Storage is optional. */
+    }
+  };
+  const clearInput = () => {
+    keys.clear();
+    pointers.clear();
+  };
+  const input = () => ({
+    left:
+      keys.has("ArrowLeft") ||
+      keys.has("KeyA") ||
+      [...pointers.values()].includes("left"),
+    right:
+      keys.has("ArrowRight") ||
+      keys.has("KeyD") ||
+      [...pointers.values()].includes("right"),
+    fire: keys.has("Space") || [...pointers.values()].includes("fire"),
   });
-
-  const input = {
-    left: false,
-    right: false,
-    fire: false,
-    pause: false,
-  };
-  const statusText = document.getElementById("statusText");
-
-  const colors = {
-    water: ["#0f274a", "#0d1c38", "#0a152d"],
-    shoreline: "#27406c",
-    croc: "#4ae3b5",
-    crocBelly: "#1fa36f",
-    projectile: "#ff9f43",
-    jet: "#d9e1ff",
-    jetAccent: "#4a90e3",
-    hud: "#e8f1ff",
-  };
-
-  const state = {
-    running: false,
-    paused: false,
-    gameOver: false,
-    elapsed: 0,
-    spawnTimer: 0,
-    spawnInterval: 1.6,
-    score: 0,
-    hits: 0,
-    shots: 0,
-    streak: 0,
-    bestStreak: 0,
-    hearts: 4,
-    wave: 1,
-    message: "Press ENTER or SPACE to begin",
-    harpoons: [],
-    crocs: [],
-    particles: [],
-  };
-
-  const syncStatusText = () => {
-    if (statusText) {
-      statusText.textContent = state.message;
-    }
-  };
-
-  class Player {
-    constructor() {
-      this.x = WIDTH / 2;
-      this.y = 120;
-      this.speed = 240;
-      this.fireCooldown = 0;
-      this.fireRate = 0.28;
-    }
-
-    update(dt) {
-      const direction = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-      this.x += direction * this.speed * dt;
-      this.x = Math.max(60, Math.min(WIDTH - 60, this.x));
-
-      if (this.fireCooldown > 0) this.fireCooldown -= dt;
-      if (state.running && !state.paused && input.fire && this.fireCooldown <= 0) {
-        spawnHarpoon(this.x, this.y + 20);
-        this.fireCooldown = this.fireRate;
-      }
-    }
-
-    draw(ctx) {
-      ctx.save();
-      ctx.translate(this.x, this.y);
-      ctx.fillStyle = colors.jet;
-      ctx.beginPath();
-      ctx.moveTo(0, -18);
-      ctx.quadraticCurveTo(32, 10, 0, 18);
-      ctx.quadraticCurveTo(-32, 10, 0, -18);
-      ctx.fill();
-      ctx.fillStyle = colors.jetAccent;
-      ctx.fillRect(-8, -14, 16, 28);
-      ctx.fillStyle = "rgba(255,255,255,0.35)";
-      ctx.fillRect(-4, -10, 8, 16);
-      ctx.restore();
+  function tone(frequency, duration, type = "sine", volume = 0.035) {
+    if (!sound || !audio || audio.state !== "running") return;
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, audio.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(
+      frequency * 0.5,
+      audio.currentTime + duration,
+    );
+    gain.gain.setValueAtTime(volume, audio.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + duration);
+    oscillator.connect(gain).connect(audio.destination);
+    oscillator.start();
+    oscillator.stop(audio.currentTime + duration);
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      gain.disconnect();
+    };
+  }
+  function toast(message) {
+    $("toast").textContent = message;
+    toastTime = 2.2;
+  }
+  function syncStats() {
+    $("score").textContent = String(game.score).padStart(5, "0");
+    $("best").textContent = String(best).padStart(5, "0");
+    $("wave").textContent = String(game.wave).padStart(2, "0");
+    $("lives").textContent =
+      "● ".repeat(game.lives) + "○ ".repeat(4 - game.lives);
+    $("lives").setAttribute("aria-label", `${game.lives} lives remaining`);
+  }
+  function showOverlay() {
+    const paused = game.mode === "paused";
+    const over = game.mode === "over";
+    $("overlay").hidden = game.mode === "playing";
+    $("pause").disabled = !["playing", "paused"].includes(game.mode);
+    $("pause").textContent = paused ? "Resume" : "Pause";
+    $("difficultyLabel").hidden = paused;
+    if (paused || over) {
+      $("badge").textContent = paused
+        ? "A MOMENT OF STILL WATER"
+        : "THAT’S A WRAP, CAPTAIN";
+      $("overlayTitle").textContent = paused
+        ? "On a river break."
+        : "Patrol complete.";
+      $("overlayCopy").textContent = paused
+        ? "Your boat is safe. Pick up right where you left off."
+        : `${game.score.toLocaleString()} points · Wave ${game.wave} · ${game.hits} catches · Best streak ${game.bestStreak}`;
+      $("start").textContent = paused ? "Resume patrol ↗" : "Try again ↗";
+      $("startHint").textContent = paused
+        ? "OR PRESS P / ENTER"
+        : "OR PRESS ENTER / R";
+      $("status").textContent = paused
+        ? "Patrol paused. Take your time."
+        : "Patrol complete. There’s always another round.";
+      $("start").focus({ preventScroll: true });
     }
   }
-
-  class Harpoon {
-    constructor(x, y) {
-      this.x = x;
-      this.y = y;
-      this.speed = 520;
-      this.active = true;
+  function start() {
+    clearInput();
+    if (game.mode === "paused") game.resume();
+    else {
+      game.start($("difficulty").value);
+      readBest();
+      particles.length = 0;
+      labels.length = 0;
+      flash = 0;
+      toast("Wave 1 · Welcome to the bayou");
     }
-
-    update(dt) {
-      this.y += this.speed * dt;
-      if (this.y > HEIGHT + 16) this.active = false;
-    }
-
-    draw(ctx) {
-      ctx.save();
-      ctx.strokeStyle = colors.projectile;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(this.x, this.y - 12);
-      ctx.lineTo(this.x, this.y + 12);
-      ctx.stroke();
-      ctx.restore();
-    }
+    accumulator = 0;
+    $("status").textContent =
+      "Patrol in progress. Catch crocs before they escape.";
+    showOverlay();
+    syncStats();
+    $("playfield").focus({ preventScroll: true });
+    document
+      .querySelector(".arcade")
+      .scrollIntoView({ block: "start", behavior: "instant" });
+    if (audio?.state === "suspended") audio.resume().catch(() => {});
+  }
+  function pause() {
+    if (game.mode !== "playing") return;
+    game.pause();
+    clearInput();
+    showOverlay();
+  }
+  function togglePause() {
+    if (game.mode === "paused") start();
+    else pause();
   }
 
-  class Croc {
-    constructor() {
-      const fromLeft = Math.random() > 0.5;
-      this.y = 300 + Math.random() * 180;
-      this.x = fromLeft ? -80 : WIDTH + 80;
-      this.speed = 70 + Math.random() * (90 + state.wave * 15);
-      this.direction = fromLeft ? 1 : -1;
-      this.width = 90;
-      this.height = 26;
-      this.health = 1;
-      this.active = true;
-    }
-
-    update(dt) {
-      this.x += this.speed * this.direction * dt;
-      if (this.x < -140 || this.x > WIDTH + 140) {
-        this.active = false;
-        loseHeart();
+  // Seeded scenery avoids a flickering landscape and needs no downloaded assets.
+  function makeScenery() {
+    const w = game.width;
+    scenery.width = w;
+    scenery.height = HEIGHT;
+    let seed = 41;
+    const random = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    const gradient = bg.createLinearGradient(0, 0, 0, HEIGHT);
+    gradient.addColorStop(0, "#315c49");
+    gradient.addColorStop(0.48, "#234f43");
+    gradient.addColorStop(1, "#163b35");
+    bg.fillStyle = gradient;
+    bg.fillRect(0, 0, w, HEIGHT);
+    // Dark reed banks frame the play area; the open central channel stays readable.
+    for (const side of [0, 1]) {
+      bg.fillStyle = "#203e2d";
+      bg.beginPath();
+      bg.moveTo(side ? w : 0, 0);
+      for (let y = 0; y <= HEIGHT; y += 20) {
+        bg.lineTo(side ? w - 20 - random() * 18 : 20 + random() * 18, y);
+      }
+      bg.lineTo(side ? w : 0, HEIGHT);
+      bg.fill();
+      for (let i = 0; i < 100; i++) {
+        const x = side ? w - random() * 35 : random() * 35;
+        const y = random() * HEIGHT;
+        bg.strokeStyle = ["#476344", "#65764b", "#304d36"][i % 3];
+        bg.lineWidth = 1.5;
+        bg.beginPath();
+        bg.moveTo(x, y);
+        bg.lineTo(x + random() * 14 - 7, y - 10 - random() * 23);
+        bg.stroke();
       }
     }
-
-    draw(ctx) {
-      ctx.save();
-      ctx.translate(this.x, this.y);
-      ctx.scale(this.direction, 1);
-      ctx.fillStyle = colors.croc;
-      ctx.beginPath();
-      ctx.moveTo(-40, 0);
-      ctx.quadraticCurveTo(-16, -16, 34, -8);
-      ctx.quadraticCurveTo(48, -4, 46, 0);
-      ctx.quadraticCurveTo(48, 4, 34, 8);
-      ctx.quadraticCurveTo(-16, 16, -40, 0);
-      ctx.fill();
-      ctx.fillStyle = colors.crocBelly;
-      ctx.fillRect(-14, -6, 32, 12);
-      ctx.fillStyle = "#0b1021";
-      ctx.beginPath();
-      ctx.arc(18, -6, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+    for (let i = 0; i < 26; i++) {
+      const side = random() > 0.5;
+      const x = side ? w - 25 - random() * 75 : 25 + random() * 75;
+      const y = 40 + random() * 490;
+      const radius = 5 + random() * 11;
+      bg.fillStyle = "#0c2e2b55";
+      bg.beginPath();
+      bg.ellipse(x + 4, y + 3, radius + 4, radius * 0.6, 0, 0, Math.PI * 2);
+      bg.fill();
+      bg.fillStyle = ["#657e47", "#4e703f", "#789254"][i % 3];
+      bg.beginPath();
+      bg.moveTo(x, y);
+      bg.ellipse(x, y, radius, radius * 0.6, -0.3, 0.25, Math.PI * 2 - 0.12);
+      bg.closePath();
+      bg.fill();
     }
-
-    hit() {
-      this.health -= 1;
-      if (this.health <= 0) {
-        this.active = false;
-        popSplash(this.x, this.y, colors.croc);
-        awardScore();
-      }
+    for (let i = 0; i < 100; i++) {
+      const x = random() * w;
+      const y = random() * HEIGHT;
+      bg.strokeStyle = "#a1c39b0c";
+      bg.beginPath();
+      bg.moveTo(x, y);
+      bg.lineTo(x + 10 + random() * 35, y);
+      bg.stroke();
     }
   }
-
-  class Particle {
-    constructor(x, y, color) {
-      this.x = x;
-      this.y = y;
-      this.life = 0.7;
-      this.speed = 120 + Math.random() * 140;
-      this.angle = Math.random() * Math.PI * 2;
-      this.color = color;
-    }
-
-    update(dt) {
-      this.life -= dt;
-      this.x += Math.cos(this.angle) * this.speed * dt;
-      this.y += Math.sin(this.angle) * this.speed * dt;
-    }
-
-    draw(ctx) {
-      ctx.save();
-      ctx.globalAlpha = Math.max(this.life, 0);
-      ctx.fillStyle = this.color;
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
+  function resize() {
+    const bounds = $("playfield").getBoundingClientRect();
+    // Hidden tabs and capture/layout transitions can briefly report zero size.
+    if (bounds.width <= 0 || bounds.height <= 0) return;
+    const width = Math.max(
+      480,
+      Math.round((HEIGHT * bounds.width) / bounds.height),
+    );
+    game.resize(width);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(HEIGHT * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    makeScenery();
+    draw();
   }
-
-  const player = new Player();
-
-  const spawnHarpoon = (x, y) => {
-    state.harpoons.push(new Harpoon(x, y));
-    state.shots += 1;
-  };
-
-  const spawnCroc = () => {
-    state.crocs.push(new Croc());
-  };
-
-  const popSplash = (x, y, color) => {
-    for (let i = 0; i < 18; i += 1) {
-      state.particles.push(new Particle(x, y, color));
-    }
-  };
-
-  const awardScore = () => {
-    const combo = 1 + state.streak * 0.05;
-    const waveBonus = 1 + state.wave * 0.15;
-    state.score += Math.round(25 * combo * waveBonus);
-    state.hits += 1;
-    state.streak += 1;
-    state.bestStreak = Math.max(state.bestStreak, state.streak);
-    maybeAdvanceWave();
-    state.message = `Streak ${state.streak}x — keep the bayou clean!`;
-    syncStatusText();
-  };
-
-  const loseHeart = () => {
-    state.hearts -= 1;
-    state.streak = 0;
-    state.message = "A croc slipped through!";
-    if (state.hearts <= 0) {
-      state.gameOver = true;
-      state.message = `You held out for ${state.wave} waves — press R to retry`;
-    }
-    syncStatusText();
-  };
-
-  const maybeAdvanceWave = () => {
-    const newWave = 1 + Math.floor(state.hits / 10);
-    if (newWave > state.wave) {
-      state.wave = newWave;
-      state.spawnInterval = Math.max(0.65, 1.6 - state.wave * 0.08);
-      state.message = `Wave ${state.wave}! The swamp is boiling.`;
-      syncStatusText();
-    }
-  };
-
-  const resetGame = () => {
-    state.running = true;
-    state.paused = false;
-    state.gameOver = false;
-    state.elapsed = 0;
-    state.spawnTimer = 0;
-    state.spawnInterval = 1.6;
-    state.score = 0;
-    state.hits = 0;
-    state.shots = 0;
-    state.streak = 0;
-    state.bestStreak = 0;
-    state.hearts = 4;
-    state.wave = 1;
-    state.message = "Wave 1 — keep the crocs away";
-    state.harpoons = [];
-    state.crocs = [];
-    state.particles = [];
-    syncStatusText();
-  };
-
-  const accuracy = () => {
-    if (state.shots === 0) return 0;
-    return Math.round((state.hits / state.shots) * 100);
-  };
-
-  const drawBackground = () => {
-    const ctx = LAYERS.background;
-    ctx.clearRect(0, 0, WIDTH, HEIGHT);
-    const gradient = ctx.createLinearGradient(0, 0, 0, HEIGHT);
-    gradient.addColorStop(0, colors.water[0]);
-    gradient.addColorStop(0.5, colors.water[1]);
-    gradient.addColorStop(1, colors.water[2]);
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-    ctx.fillStyle = colors.shoreline;
-    ctx.fillRect(0, HEIGHT - 90, WIDTH, 120);
-
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
-    ctx.lineWidth = 1.5;
-    for (let i = 0; i < 6; i += 1) {
+  function ellipse(context, x, y, rx, ry, fill) {
+    context.fillStyle = fill;
+    context.beginPath();
+    context.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+    context.fill();
+  }
+  function drawCroc(c, time) {
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.scale(c.direction, 1);
+    const wiggle = reducedMotion.matches ? 0 : Math.sin(time * 6 + c.phase) * 4;
+    ctx.strokeStyle = "#a9cd9a26";
+    ctx.lineWidth = 1;
+    for (const offset of [-20, 20]) {
       ctx.beginPath();
-      const waveY = 120 + i * 60;
-      ctx.moveTo(0, waveY);
-      for (let x = 0; x <= WIDTH; x += 24) {
-        const y = waveY + Math.sin((x / 40) + i) * 5;
-        ctx.lineTo(x, y);
-      }
+      ctx.ellipse(-8, offset, 47, 5, 0, 0.2, Math.PI - 0.2);
       ctx.stroke();
     }
-  };
-
-  const drawCrocs = () => {
-    const ctx = LAYERS.enemies;
-    ctx.clearRect(0, 0, WIDTH, HEIGHT);
-    state.crocs.forEach((croc) => croc.draw(ctx));
-    state.particles.forEach((p) => p.draw(ctx));
-  };
-
-  const drawPlayer = () => {
-    const ctx = LAYERS.player;
-    ctx.clearRect(0, 0, WIDTH, HEIGHT);
-    state.harpoons.forEach((harpoon) => harpoon.draw(ctx));
-    player.draw(ctx);
-  };
-
-  const drawHud = () => {
-    const ctx = LAYERS.hud;
-    ctx.clearRect(0, 0, WIDTH, HEIGHT);
-    ctx.fillStyle = "rgba(0,0,0,0.18)";
-    ctx.fillRect(0, 0, WIDTH, 64);
-    ctx.fillStyle = colors.hud;
-    ctx.font = "16px 'Inter', 'Segoe UI', sans-serif";
-    ctx.textBaseline = "top";
-
-    ctx.fillText(`Score: ${state.score}`, 22, 18);
-    ctx.fillText(`Wave: ${state.wave}`, 160, 18);
-    ctx.fillText(`Accuracy: ${accuracy()}%`, 260, 18);
-    ctx.fillText(`Streak: ${state.streak} (best ${state.bestStreak})`, 420, 18);
-
-    for (let i = 0; i < state.hearts; i += 1) {
-      const x = WIDTH - 26 - i * 26;
-      ctx.fillStyle = colors.accent;
+    ellipse(ctx, 0, 5, 51, 13, "#092d2a55");
+    ctx.fillStyle = c.swift ? "#b5a45e" : "#85a45d";
+    ctx.beginPath();
+    ctx.moveTo(-23, -9);
+    ctx.quadraticCurveTo(-42, -11, -65, wiggle);
+    ctx.quadraticCurveTo(-38, 9, -24, 9);
+    ctx.closePath();
+    ctx.fill();
+    for (const x of [-20, 15]) {
+      ctx.fillStyle = "#617d47";
       ctx.beginPath();
-      ctx.arc(x, 26, 10, 0, Math.PI * 2);
-      ctx.arc(x + 12, 26, 10, 0, Math.PI * 2);
-      ctx.moveTo(x - 6, 30);
-      ctx.lineTo(x + 12, 46);
-      ctx.lineTo(x + 30, 30);
+      ctx.moveTo(x - 4, -8);
+      ctx.lineTo(x - 11, -20);
+      ctx.lineTo(x + 6, -15);
+      ctx.lineTo(x + 9, 0);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x - 4, 8);
+      ctx.lineTo(x - 11, 20);
+      ctx.lineTo(x + 6, 15);
+      ctx.lineTo(x + 9, 0);
       ctx.fill();
     }
-
-    ctx.textBaseline = "middle";
-    ctx.font = "22px 'Inter', 'Segoe UI', sans-serif";
-    ctx.fillStyle = "rgba(232,241,255,0.9)";
-    ctx.fillText(state.message, 22, HEIGHT - 30);
-
-    if (!state.running) {
-      ctx.fillStyle = "rgba(11,16,33,0.75)";
-      ctx.fillRect(0, 0, WIDTH, HEIGHT);
-      ctx.fillStyle = colors.hud;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = "32px 'Inter', 'Segoe UI', sans-serif";
-      ctx.fillText("Croc Hunter: Tidal Revenge", WIDTH / 2, HEIGHT / 2 - 24);
-      ctx.font = "18px 'Inter', 'Segoe UI', sans-serif";
-      ctx.fillText("Press ENTER or SPACE to begin", WIDTH / 2, HEIGHT / 2 + 12);
-      ctx.fillText("Move with A/D or arrows, fire with SPACE", WIDTH / 2, HEIGHT / 2 + 40);
-    } else if (state.paused) {
-      ctx.fillStyle = "rgba(11,16,33,0.65)";
-      ctx.fillRect(0, 0, WIDTH, HEIGHT);
-      ctx.fillStyle = colors.hud;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = "28px 'Inter', 'Segoe UI', sans-serif";
-      ctx.fillText("Paused — press P to resume", WIDTH / 2, HEIGHT / 2);
-    } else if (state.gameOver) {
-      ctx.fillStyle = "rgba(11,16,33,0.7)";
-      ctx.fillRect(0, 0, WIDTH, HEIGHT);
-      ctx.fillStyle = colors.hud;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = "30px 'Inter', 'Segoe UI', sans-serif";
-      ctx.fillText("The bayou is overrun!", WIDTH / 2, HEIGHT / 2 - 10);
-      ctx.font = "18px 'Inter', 'Segoe UI', sans-serif";
-      ctx.fillText(`Final score ${state.score} — best streak ${state.bestStreak}`, WIDTH / 2, HEIGHT / 2 + 20);
-      ctx.fillText("Press R to restart", WIDTH / 2, HEIGHT / 2 + 48);
+    ellipse(ctx, -4, 0, 34, 13, c.swift ? "#b5a45e" : "#85a45d");
+    ctx.fillStyle = c.swift ? "#c6b870" : "#9ebc70";
+    ctx.beginPath();
+    ctx.moveTo(12, -10);
+    ctx.lineTo(42, -8);
+    ctx.quadraticCurveTo(54, 0, 42, 8);
+    ctx.lineTo(12, 10);
+    ctx.fill();
+    ctx.strokeStyle = "#416544";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(28, 3);
+    ctx.lineTo(48, 3);
+    ctx.stroke();
+    for (let x = -25; x <= 8; x += 9) {
+      ctx.fillStyle = "#4e7041";
+      ctx.beginPath();
+      ctx.moveTo(x, -4);
+      ctx.lineTo(x + 5, 0);
+      ctx.lineTo(x, 4);
+      ctx.closePath();
+      ctx.fill();
     }
-  };
-
-  const updateEntities = (dt) => {
-    player.update(dt);
-    state.harpoons.forEach((harpoon) => harpoon.update(dt));
-    state.crocs.forEach((croc) => croc.update(dt));
-    state.particles.forEach((p) => p.update(dt));
-
-    state.harpoons = state.harpoons.filter((h) => h.active);
-    state.crocs = state.crocs.filter((c) => c.active);
-    state.particles = state.particles.filter((p) => p.life > 0);
-
-    state.crocs.forEach((croc) => {
-      state.harpoons.forEach((harpoon) => {
-        if (!croc.active || !harpoon.active) return;
-        const withinX = Math.abs(croc.x - harpoon.x) < 48;
-        const withinY = Math.abs(croc.y - harpoon.y) < 24;
-        if (withinX && withinY) {
-          croc.hit();
-          harpoon.active = false;
-        }
-      });
-    });
-  };
-
-  const update = (dt) => {
-    if (!state.running || state.paused || state.gameOver) return;
-
-    state.elapsed += dt;
-    state.spawnTimer += dt;
-
-    const targetInterval = Math.max(0.6, state.spawnInterval - state.wave * 0.01);
-    if (state.spawnTimer >= targetInterval) {
-      spawnCroc();
-      state.spawnTimer = 0;
+    ellipse(ctx, 24, -8, 5, 4, "#d2dca2");
+    ellipse(ctx, 25, -8, 2, 2, "#162f25");
+    ellipse(ctx, 24, 8, 4, 3, "#b7cc85");
+    ellipse(ctx, 25, 8, 1.7, 1.7, "#162f25");
+    ctx.restore();
+  }
+  function drawBoat(time) {
+    const { x, y } = game.player;
+    ctx.save();
+    ctx.translate(
+      x,
+      y + (reducedMotion.matches ? 0 : Math.sin(time * 3) * 1.6),
+    );
+    ctx.strokeStyle = "#d6e4c637";
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.ellipse(0, -26 - i * 10, 13 + i * 4, 4, 0, Math.PI, Math.PI * 2);
+      ctx.stroke();
     }
-
-    updateEntities(dt);
-  };
-
-  const render = () => {
-    drawCrocs();
-    drawPlayer();
-    drawHud();
-  };
-
-  const loop = (timestamp) => {
-    if (!state.lastTime) state.lastTime = timestamp;
-    const dt = Math.min((timestamp - state.lastTime) / 1000, 0.1);
-    state.lastTime = timestamp;
-
-    update(dt);
-    render();
-    requestAnimationFrame(loop);
-  };
-
-  const bindInput = () => {
-    const isGameKey = (key) =>
-      ["ArrowLeft", "ArrowRight", "a", "d", " ", "Spacebar", "Enter", "p", "r"].includes(key);
-
-    const setKey = (key, isDown) => {
-      const lowered = key.toLowerCase();
-      if (key === "ArrowLeft" || lowered === "a") input.left = isDown;
-      if (key === "ArrowRight" || lowered === "d") input.right = isDown;
-      if (key === " " || key === "Spacebar") input.fire = isDown;
-      if (lowered === "p") input.pause = isDown;
-    };
-
-    window.addEventListener("keydown", (event) => {
-      if (isGameKey(event.key)) event.preventDefault();
-      setKey(event.key, true);
-
-      if (event.key === "Enter" || event.key === " ") {
-        if (!state.running || state.gameOver) {
-          resetGame();
-        }
+    ellipse(ctx, 5, 5, 24, 43, "#082d2c66");
+    ctx.fillStyle = "#d4c79f";
+    ctx.beginPath();
+    ctx.moveTo(-19, -32);
+    ctx.lineTo(19, -32);
+    ctx.quadraticCurveTo(27, 20, 0, 43);
+    ctx.quadraticCurveTo(-27, 20, -19, -32);
+    ctx.fill();
+    ctx.fillStyle = "#725f3e";
+    ctx.beginPath();
+    ctx.moveTo(-13, -23);
+    ctx.lineTo(13, -23);
+    ctx.lineTo(11, 16);
+    ctx.lineTo(0, 30);
+    ctx.lineTo(-11, 16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#b4a17c";
+    ctx.fillRect(-15, -15, 30, 6);
+    ctx.fillRect(-12, 9, 24, 6);
+    ctx.fillStyle = "#263f32";
+    ctx.fillRect(-7, -39, 14, 14);
+    ellipse(ctx, 0, -1, 10, 9, "#e5a75b");
+    ellipse(ctx, 0, -5, 13, 6, "#e4d4a7");
+    ellipse(ctx, 0, -7, 8, 6, "#b7a675");
+    ctx.fillStyle = "#34483c";
+    ctx.fillRect(-3, 13, 6, 27);
+    ctx.fillStyle = "#e9e2c5";
+    ctx.fillRect(-2, 34, 4, 9);
+    ctx.restore();
+  }
+  function draw() {
+    const time = reducedMotion.matches ? 0 : game.elapsed;
+    ctx.clearRect(0, 0, game.width, HEIGHT);
+    ctx.drawImage(scenery, 0, 0);
+    ctx.strokeStyle = "#a5c8af13";
+    ctx.lineWidth = 1;
+    for (let row = 0; row < 12; row++) {
+      const y = row * 47 + 12;
+      for (let col = 0; col < game.width / 130; col++) {
+        const x = col * 130 + Math.sin(row) * 28;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.quadraticCurveTo(
+          x + 27,
+          y + Math.sin(time * 1.4 + row) * 4,
+          x + 55,
+          y,
+        );
+        ctx.stroke();
       }
-
-      if (event.key.toLowerCase() === "p" && state.running && !state.gameOver) {
-        state.paused = !state.paused;
-        state.message = state.paused ? "Paused" : "Back in the fight";
-        syncStatusText();
-      }
-
-      if (event.key.toLowerCase() === "r") {
-        resetGame();
-      }
-    });
-
-    window.addEventListener("keyup", (event) => {
-      if (isGameKey(event.key)) event.preventDefault();
-      setKey(event.key, false);
-    });
-
-    window.addEventListener("blur", () => {
-      if (state.running) {
-        state.paused = true;
-        state.message = "Paused";
-        syncStatusText();
-      }
-    });
-
-    const holdButton = (id, prop) => {
-      const button = document.getElementById(id);
-      if (!button) return;
-      const press = (e) => {
-        e.preventDefault();
-        input[prop] = true;
-      };
-      const release = (e) => {
-        e.preventDefault();
-        input[prop] = false;
-      };
-      button.addEventListener("pointerdown", press);
-      button.addEventListener("pointerup", release);
-      button.addEventListener("pointerleave", release);
-      button.addEventListener("pointercancel", release);
-    };
-
-    holdButton("btnLeft", "left");
-    holdButton("btnRight", "right");
-    holdButton("btnFire", "fire");
-
-    const pauseButton = document.getElementById("btnPause");
-    if (pauseButton) {
-      pauseButton.addEventListener("click", (event) => {
-        event.preventDefault();
-        if (!state.running || state.gameOver) {
-          resetGame();
-          return;
-        }
-        state.paused = !state.paused;
-        state.message = state.paused ? "Paused" : "Back in the fight";
-        syncStatusText();
-      });
     }
-  };
-
-  drawBackground();
-  bindInput();
-  syncStatusText();
-  render();
-  requestAnimationFrame(loop);
+    if (game.mode === "ready") {
+      [
+        { x: game.width * 0.16, y: 340, direction: 1, phase: 0 },
+        { x: game.width * 0.83, y: 210, direction: -1, phase: 2 },
+        { x: game.width * 0.81, y: 450, direction: 1, phase: 1 },
+      ].forEach((c) => drawCroc(c, time));
+    }
+    game.crocs.forEach((c) => drawCroc(c, time));
+    drawBoat(time);
+    for (const h of game.harpoons) {
+      ctx.strokeStyle = "#f0d491";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(h.x, h.y - 20);
+      ctx.lineTo(h.x, h.y + 8);
+      ctx.moveTo(h.x - 5, h.y + 2);
+      ctx.lineTo(h.x, h.y + 9);
+      ctx.lineTo(h.x + 5, h.y + 2);
+      ctx.stroke();
+    }
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life * 1.5);
+      ellipse(ctx, p.x, p.y, p.size, p.size, p.color);
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "center";
+    ctx.font = "bold 18px monospace";
+    for (const label of labels) {
+      ctx.globalAlpha = Math.min(1, label.life);
+      ctx.fillStyle = "#e3eeae";
+      ctx.fillText(`+${label.points}`, label.x, label.y);
+    }
+    ctx.globalAlpha = 1;
+    if (flash > 0 && !reducedMotion.matches) {
+      ctx.fillStyle = `rgba(228,130,85,${flash * 0.2})`;
+      ctx.fillRect(0, 0, game.width, HEIGHT);
+    }
+  }
+  function effects(dt) {
+    for (const event of game.drainEvents()) {
+      if (event.type === "fire") tone(330, 0.07, "triangle", 0.018);
+      if (event.type === "catch") {
+        tone(700, 0.14);
+        labels.push({ ...event, life: 1.1 });
+        if (!reducedMotion.matches)
+          for (let i = 0; i < 12; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            particles.push({
+              x: event.x,
+              y: event.y,
+              vx: Math.cos(angle) * 80,
+              vy: Math.sin(angle) * 80,
+              life: 0.6,
+              size: 1 + Math.random() * 3,
+              color: i % 2 ? "#a4c992" : "#e5e3ad",
+            });
+          }
+        saveBest();
+        $("status").textContent =
+          `${game.streak} catch streak · ${Math.min(4, 1 + Math.floor(game.streak / 5))}× score multiplier`;
+      }
+      if (event.type === "wave") {
+        toast(
+          `Wave ${event.wave} · ${event.wave === 3 ? "Watch for fast golden crocs!" : "The river is picking up"}`,
+        );
+        tone(900, 0.3);
+      }
+      if (event.type === "escape") {
+        flash = 0.6;
+        tone(130, 0.24, "sawtooth", 0.025);
+        toast("Croc escaped · Hull damaged");
+      }
+      if (event.type === "over") {
+        saveBest();
+        clearInput();
+        $("toast").textContent = "";
+        showOverlay();
+      }
+      syncStats();
+    }
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life -= dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (let i = labels.length - 1; i >= 0; i--) {
+      labels[i].life -= dt;
+      labels[i].y -= 25 * dt;
+      if (labels[i].life <= 0) labels.splice(i, 1);
+    }
+    flash = Math.max(0, flash - dt);
+    toastTime -= dt;
+    if (toastTime <= 0) $("toast").textContent = "";
+  }
+  function frame(timestamp) {
+    const dt = lastTime ? Math.min((timestamp - lastTime) / 1000, 0.1) : 0;
+    lastTime = timestamp;
+    if (game.mode === "playing") {
+      accumulator += dt;
+      while (accumulator >= 1 / 60) {
+        game.step(1 / 60, input());
+        effects(1 / 60);
+        accumulator -= 1 / 60;
+        if (game.mode !== "playing") {
+          accumulator = 0;
+          break;
+        }
+      }
+    }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  const gameKeys = [
+    "ArrowLeft",
+    "ArrowRight",
+    "KeyA",
+    "KeyD",
+    "Space",
+    "KeyP",
+    "Enter",
+    "KeyR",
+    "Escape",
+  ];
+  window.addEventListener("keydown", (event) => {
+    if (
+      !gameKeys.includes(event.code) ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey
+    )
+      return;
+    // Keep native keyboard activation and select navigation intact.
+    if (event.target.closest?.("select, input, textarea")) return;
+    if (
+      event.target.closest?.("button, a") &&
+      ["Space", "Enter"].includes(event.code)
+    )
+      return;
+    event.preventDefault();
+    if (event.repeat) return;
+    if (event.code === "KeyP" || event.code === "Escape") {
+      togglePause();
+      return;
+    }
+    if (event.code === "Enter" && game.mode !== "playing") {
+      start();
+      return;
+    }
+    if (event.code === "KeyR" && game.mode === "over") {
+      start();
+      return;
+    }
+    if (event.code === "Space" && ["ready", "over"].includes(game.mode))
+      start();
+    if (game.mode === "playing") keys.add(event.code);
+  });
+  window.addEventListener("keyup", (event) => keys.delete(event.code));
+  window.addEventListener("blur", () => {
+    clearInput();
+    pause();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      clearInput();
+      pause();
+    }
+  });
+  for (const action of ["left", "right", "fire"]) {
+    const button = $(action);
+    button.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      if (game.mode !== "playing") return;
+      button.setPointerCapture(event.pointerId);
+      pointers.set(event.pointerId, action);
+    });
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"])
+      button.addEventListener(type, (event) =>
+        pointers.delete(event.pointerId),
+      );
+    button.addEventListener("contextmenu", (event) => event.preventDefault());
+  }
+  $("start").addEventListener("click", start);
+  $("pause").addEventListener("click", togglePause);
+  $("difficulty").addEventListener("change", () => {
+    game.difficulty = $("difficulty").value;
+    readBest();
+    syncStats();
+  });
+  $("sound").addEventListener("click", async () => {
+    try {
+      if (!audio) {
+        const Audio = window.AudioContext || window.webkitAudioContext;
+        if (!Audio) throw new Error("unavailable");
+        audio = new Audio();
+      }
+      await audio.resume();
+      sound = !sound;
+      $("sound").textContent = sound ? "Sound on" : "Sound off";
+      $("sound").setAttribute("aria-pressed", String(sound));
+      if (game.mode === "playing")
+        $("playfield").focus({ preventScroll: true });
+      if (sound) tone(600, 0.12);
+    } catch {
+      $("status").textContent =
+        "Sound is unavailable in this browser. You can still play.";
+    }
+  });
+  if (!document.fullscreenEnabled) $("fullscreen").hidden = true;
+  $("fullscreen").addEventListener("click", async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.querySelector(".arcade").requestFullscreen();
+      if (game.mode === "playing")
+        $("playfield").focus({ preventScroll: true });
+    } catch {
+      $("status").textContent =
+        "Full screen is unavailable. Your patrol can continue here.";
+    }
+  });
+  document.addEventListener("fullscreenchange", () => {
+    $("fullscreen").textContent = document.fullscreenElement
+      ? "Exit full screen"
+      : "Full screen";
+  });
+  new ResizeObserver(resize).observe($("playfield"));
+  readBest();
+  syncStats();
+  resize();
+  requestAnimationFrame(frame);
 })();
