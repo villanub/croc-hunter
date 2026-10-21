@@ -1,52 +1,58 @@
 # Croc Hunter
 
-Croc Hunter is a simple arcade-style web game and demo application.
+A browser arcade game about a small boat and a very busy bayou. Catch crossing crocs with your harpoon before they escape, build a streak, and survive increasingly fast waves.
 
-## Running locally
+## Play locally
 
-1. Install dependencies:
+Use Node.js 22 or newer (Node.js 24 is used in CI and Docker):
 
-   ```bash
-   npm ci
-   ```
-
-2. Start the server (defaults to port 8080):
-
-   ```bash
-   npm start
-   ```
-
-3. Open http://localhost:8080 to play the game.
-
-## Play on GitHub Pages
-
-This repo includes a static entry page (`index.html`) and a GitHub Actions workflow that deploys to GitHub Pages on every push to `main`.
-
-1. In your GitHub repository settings, open **Pages**.
-2. Set **Source** to **GitHub Actions**.
-3. Push to `main` (or manually run the **Deploy static game to GitHub Pages** workflow).
-4. Open the generated Pages URL to play the game.
-
-The hosted Pages build includes mobile-friendly on-screen controls as well as keyboard controls.
-
-The server honors the following environment variables when rendering the landing page:
-
-- `WORKFLOW_RELEASE` – Release identifier to display.
-- `GIT_SHA` – Commit hash to display.
-- `POWERED_BY` – Platform or team name to display (defaults to `deis`).
-
-A `/healthz` endpoint is also available for liveness checks.
-
-## Docker
-
-Build a container image using the provided Dockerfile:
-
-```bash
-make docker_build
+```sh
+npm ci
+npm start
 ```
 
-Push the tagged image:
+Open **http://localhost:8080**. The game has no runtime dependencies, remote fonts, asset CDN, account requirement, or paid services. You can also serve `index.html` and `static/` with any static web server.
 
-```bash
-make docker_push
+## Controls
+
+| Action                | Keyboard                       | Touch                    |
+| --------------------- | ------------------------------ | ------------------------ |
+| Start / retry         | Enter, or Space from the board | Start patrol / Try again |
+| Steer                 | Left / Right or A / D          | Hold the arrow buttons   |
+| Fire                  | Hold Space                     | Hold Fire Harpoon        |
+| Pause / resume        | P or Escape                    | Pause / Resume           |
+| Retry after game over | R from the board               | Try again                |
+
+Four escaped crocs end your patrol. Every eight catches starts a new wave; golden crocs appear from wave three. Every five consecutive catches raises the score multiplier, up to 4×. An escaped croc breaks the streak.
+
+Choose **Easy waters**, **Classic patrol**, or **Croc country** before starting. Personal bests are saved separately for each difficulty on this browser when local storage is available. Sound is off by default; enable it with the Sound button. Switching tabs or leaving the window automatically pauses play. Reduced-motion preferences disable decorative movement, splash particles, and damage flashes.
+
+## GitHub Pages
+
+The deployment workflow targets this repository's default branch, **master**. In repository **Settings → Pages**, select **GitHub Actions** as the source, then run **Deploy static game to GitHub Pages**, or push to `master`.
+
+Once configured and deployed, the game will be at **https://villanub.github.io/croc-hunter/**. This address is the deployment destination; merely checking out this source does not publish it. Assets use relative URLs, so the game works under the repository path.
+
+The Node server serves the same `index.html` as Pages. It retains `/healthz` for container probes and exposes optional deployment metadata at `/version` (`WORKFLOW_RELEASE`, `GIT_SHA`, and `POWERED_BY`). Infrastructure details are kept out of the game interface.
+
+## Validation
+
+```sh
+npm run lint
+npm test
+npx playwright install chromium firefox webkit
+npm run test:browser
 ```
+
+The simulation tests cover collisions, scoring, waves, lives, difficulty, pause, resizing, and full resets. HTTP tests verify static-page parity, assets, health, invalid URLs, and path boundaries. Playwright exercises desktop Chromium/Firefox and mobile Chromium/WebKit layouts, scoring, persistence, start/pause/retry, storage denial, and touch controls. Screenshots are generated in `artifacts/screenshots/` (ignored by Git).
+
+`static/engine.js` contains the deterministic simulation; `static/game.js` handles canvas drawing, input, audio, and the interface. Art and sound are generated in the browser. The original sprite assets and `game2.js` are retained as historical assets, but the game does not load them.
+
+## Docker and legacy infrastructure
+
+```sh
+docker build -t croc-hunter .
+docker run --rm -p 8080:8080 croc-hunter
+```
+
+`PORT` defaults to `8080`; `HOST` defaults to `0.0.0.0`. Existing Helm, Flux, Draft, and Azure Pipeline files remain for the historical AKS demo. They are not required for browser play and were not modernized as part of the game update. The separate `villanub/croc-pulumi` infrastructure repository is archived.

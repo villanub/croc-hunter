@@ -1,60 +1,157 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Croc Hunter</title>
+    <meta name="theme-color" content="#122e29" />
+    <meta
+      name="description"
+      content="A little danger. A lot of swamp. Play Croc Hunter, a free arcade game for your browser, with keyboard or touch controls."
+    />
+    <title>Croc Hunter — On swamp patrol</title>
+    <link rel="icon" href="./static/favicon-32x32.png" />
     <link rel="stylesheet" href="./static/game.css" />
-    <link rel="icon" type="image/png" href="./static/favicon-16x16.png" sizes="16x16" />
-    <link rel="icon" type="image/png" href="./static/favicon-32x32.png" sizes="32x32" />
   </head>
   <body>
-    <main class="wrapper">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">Croc Hunter</p>
-          <h1>The bayou is back and meaner than ever</h1>
-          <p class="lede">Dodge, dive and harpoon your way through waves of cranky crocs. Rack up streaks, keep the coast safe, and see how long you can survive the onslaught.</p>
-        </div>
-        <div class="pill" role="status" aria-live="polite">
-          <strong class="label">Status</strong>
-          <span id="statusText" class="value">Press ENTER or SPACE to begin</span>
-        </div>
+    <main class="shell">
+      <header class="masthead">
+        <a class="wordmark" href="./" aria-label="Croc Hunter home"
+          ><span class="brand-icon" aria-hidden="true">≈</span> CROC HUNTER<span
+            class="edition"
+            >EST. IN THE SWAMP</span
+          ></a
+        >
+        <span class="online"><i></i> BROWSER ARCADE <span>/ 01</span></span>
       </header>
-
-      <section class="canvas-stack" aria-label="Croc Hunter game board">
-        <canvas id="canvasBg" width="960" height="540"></canvas>
-        <canvas id="canvasEnemy" width="960" height="540"></canvas>
-        <canvas id="canvasJet" width="960" height="540"></canvas>
-        <canvas id="canvasHud" width="960" height="540"></canvas>
-      </section>
-
-      <section class="touch-controls" aria-label="Touch controls">
-        <button id="btnLeft" type="button">◀ Left</button>
-        <button id="btnFire" type="button">Harpoon</button>
-        <button id="btnRight" type="button">Right ▶</button>
-        <button id="btnPause" type="button">Pause / Resume</button>
-      </section>
-
-      <section class="details">
-        <div class="card">
-          <h2>Play controls</h2>
-          <ul>
-            <li><strong>Move</strong> with <kbd>A</kbd>/<kbd>D</kbd> or <kbd>Left</kbd>/<kbd>Right</kbd></li>
-            <li><strong>Harpoon</strong> with <kbd>Space</kbd> or <kbd>Tap Harpoon</kbd></li>
-            <li><strong>Pause</strong> with <kbd>P</kbd> or <kbd>Pause / Resume</kbd></li>
-            <li><strong>Restart</strong> with <kbd>R</kbd> after a wipeout</li>
-          </ul>
+      <section class="intro">
+        <div>
+          <p class="eyebrow">WELCOME TO THE WILD SIDE</p>
+          <h1>Small boat.<br />Big <em>croc energy.</em></h1>
         </div>
-        <div class="card">
-          <h2>Build details</h2>
-          <p><strong>Hostname:</strong> github-pages</p>
-          <p><strong>Release:</strong> static-site</p>
-          <p><strong>Commit:</strong> deployed-asset</p>
-          <p><strong>Powered By:</strong> GitHub Pages</p>
+        <div class="intro-copy">
+          <p>
+            The water’s warm. The locals bite.<br />Take the helm, line up your
+            harpoon,<br />and keep the bayou under control.
+          </p>
+          <span>NO DOWNLOADS. JUST ONE MORE ROUND.</span>
         </div>
       </section>
+      <section class="arcade" aria-label="Croc Hunter arcade">
+        <div class="game-bar">
+          <div>
+            <span class="live-dot"></span> BAYOU PATROL
+            <span class="location">/ SECTOR 07</span>
+          </div>
+          <div class="tools">
+            <button id="sound" type="button" aria-pressed="false">
+              Sound off</button
+            ><button id="pause" type="button" disabled>Pause</button
+            ><button id="fullscreen" type="button">Full screen</button>
+          </div>
+        </div>
+        <div class="scoreboard" aria-label="Game statistics">
+          <div><span>SCORE</span><strong id="score">00000</strong></div>
+          <div><span>PERSONAL BEST</span><strong id="best">00000</strong></div>
+          <div><span>WAVE</span><strong id="wave">01</strong></div>
+          <div class="lives-stat">
+            <span>BOAT HULL</span
+            ><strong id="lives" aria-label="4 lives remaining">● ● ● ●</strong>
+          </div>
+        </div>
+        <div
+          class="playfield"
+          id="playfield"
+          tabindex="0"
+          aria-label="Game board. Move with A and D or arrow keys. Hold Space to fire. P to pause."
+        >
+          <canvas
+            id="game"
+            width="960"
+            height="540"
+            aria-label="Bayou game scene"
+            >Your browser needs Canvas support to play Croc Hunter.</canvas
+          >
+          <div class="scene-label" aria-hidden="true">
+            LOUISIANA WETLANDS <span>29° N / 90° W</span>
+          </div>
+          <div class="overlay" id="overlay">
+            <div class="overlay-card">
+              <span class="badge" id="badge">YOUR SHIFT STARTS HERE</span>
+              <h2 id="overlayTitle">The swamp<br />is calling.</h2>
+              <p id="overlayCopy">
+                Catch crocs before they cross the river.<br />Four escapes and
+                your patrol is over.
+              </p>
+              <label id="difficultyLabel" for="difficulty"
+                >Patrol difficulty<select id="difficulty">
+                  <option value="casual">Easy waters</option>
+                  <option value="normal" selected>Classic patrol</option>
+                  <option value="hard">Croc country</option>
+                </select></label
+              ><button class="primary" id="start" type="button">
+                Start patrol <span aria-hidden="true">↗</span></button
+              ><span class="start-hint" id="startHint">OR PRESS ENTER</span>
+            </div>
+          </div>
+          <div class="game-toast" id="toast" aria-live="polite"></div>
+        </div>
+        <div class="touch-controls" aria-label="Touch controls">
+          <button id="left" type="button" aria-label="Move left">←</button
+          ><button id="right" type="button" aria-label="Move right">→</button
+          ><button id="fire" type="button">
+            FIRE HARPOON <span aria-hidden="true">↟</span>
+          </button>
+        </div>
+        <div class="game-footer">
+          <span id="status" role="status">Ready when you are, captain.</span
+          ><span class="footer-hint">STAY SHARP. AIM AHEAD.</span>
+        </div>
+      </section>
+      <section class="field-guide" aria-label="How to play">
+        <div class="guide-title">
+          <span class="eyebrow">THE FIELD GUIDE</span>
+          <h2>Easy to learn.<br />Hard to leave.</h2>
+        </div>
+        <article>
+          <span class="step">01 / NAVIGATE</span>
+          <p>
+            <kbd>←</kbd> <kbd>→</kbd> <span class="or">or</span> <kbd>A</kbd>
+            <kbd>D</kbd>
+          </p>
+          <p>Move your boat. Lead your shot.</p>
+        </article>
+        <article>
+          <span class="step">02 / LET IT FLY</span>
+          <p>
+            <kbd class="space-key">SPACE</kbd>
+            <span class="or">hold to fire</span>
+          </p>
+          <p>Chain catches for a bigger score.</p>
+        </article>
+        <article>
+          <span class="step">03 / TAKE A BREATHER</span>
+          <p><kbd>P</kbd> <span class="or">pause & resume</span></p>
+          <p>On mobile? Use the controls above.</p>
+        </article>
+      </section>
+      <footer class="site-footer">
+        <span
+          >CROC HUNTER
+          <span class="muted">/ A LITTLE DANGER. A LOT OF SWAMP.</span></span
+        ><a
+          href="https://github.com/villanub/croc-hunter"
+          target="_blank"
+          rel="noopener noreferrer"
+          >OPEN SOURCE ↗</a
+        >
+      </footer>
+      <noscript
+        ><p class="noscript">
+          Enable JavaScript to play Croc Hunter.
+        </p></noscript
+      >
     </main>
-    <script src="./static/game.js"></script>
+    <script src="./static/engine.js" defer></script>
+    <script src="./static/game.js" defer></script>
   </body>
 </html>

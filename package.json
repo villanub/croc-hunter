@@ -5,9 +5,17 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "lint": "node --check server.js"
+    "lint": "node --check server.js && node --check static/engine.js && node --check static/game.js",
+    "test": "node --test tests/*.test.js",
+    "test:browser": "playwright test"
   },
   "author": "",
   "license": "MIT",
-  "dependencies": {}
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "prettier": "^3.9.10"
+  }
 }
