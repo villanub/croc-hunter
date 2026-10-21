@@ -1,6 +1,6 @@
 # Croc Hunter
 
-A browser arcade game about a small boat and a very busy bayou. Catch crossing crocs with your harpoon before they escape, build a streak, and survive increasingly fast waves.
+A browser arcade game about a small boat and a very busy bayou. Cruise down a scrolling river while crocs approach from both banks and downstream. Steer around them or fire your harpoon, build a streak, and survive increasingly fast waves.
 
 ## Play locally
 
@@ -23,9 +23,9 @@ Open **http://localhost:8080**. The game has no runtime dependencies, remote fon
 | Pause / resume        | P or Escape                    | Pause / Resume           |
 | Retry after game over | R from the board               | Try again                |
 
-Four escaped crocs end your patrol. Every eight catches starts a new wave; golden crocs appear from wave three. Every five consecutive catches raises the score multiplier, up to 4×. An escaped croc breaks the streak.
+The boat travels downriver automatically; the camera follows as banks and lily pads pass upstream. Crocs commit to your course when they enter, so you can dodge by steering left or right. A croc that misses you costs no hull; four direct hits end your patrol. Every eight catches starts a new wave; golden crocs appear from wave three. Every five consecutive catches raises the score multiplier, up to 4×. A hit to the boat breaks the streak. The harpoon turret automatically leads the nearest incoming croc while you hold Fire; steering remains under your control.
 
-Choose **Easy waters**, **Classic patrol**, or **Croc country** before starting. Personal bests are saved separately for each difficulty on this browser when local storage is available. Sound is off by default; enable it with the Sound button. Switching tabs or leaving the window automatically pauses play. Reduced-motion preferences disable decorative movement, splash particles, and damage flashes.
+Choose **Easy waters**, **Classic patrol**, or **Croc country** before starting. Personal bests are saved separately for each difficulty on this browser when local storage is available. Sound is off by default; enable it with the Sound button. Switching tabs or leaving the window automatically pauses play. Reduced-motion preferences disable scenery scrolling, decorative movement, splash particles, and damage flashes while keeping the simulation unchanged.
 
 ## GitHub Pages
 
