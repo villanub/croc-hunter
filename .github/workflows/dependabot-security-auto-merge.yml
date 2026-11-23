@@ -48,6 +48,7 @@ jobs:
           import json
           import os
           import subprocess
+          import time
           from urllib.parse import urlencode
 
           repo = os.environ["GH_REPO"]
@@ -105,6 +106,11 @@ jobs:
           for number in sorted(linked):
               endpoint = f"repos/{repo}/pulls/{number}"
               pr = api(endpoint)
+              for delay in (2, 4, 6):
+                  if pr["mergeable"] is not None and pr["mergeable_state"] != "unknown":
+                      break
+                  time.sleep(delay)
+                  pr = api(endpoint)
               if (pr["state"] != "open" or pr["draft"] or pr["user"]["login"] != "dependabot[bot]"
                       or pr["base"]["ref"] != branch or not pr["head"]["ref"].startswith("dependabot/")
                       or (pr["head"]["repo"] or {}).get("full_name") != repo or pr["auto_merge"]):
@@ -177,6 +183,11 @@ jobs:
               return subprocess.check_output(["gh", "api", endpoint, "--jq", expression], text=True).strip()
 
           for number, head, base in json.loads(os.environ["CANDIDATES"]):
+              endpoint = f"repos/{repo}/pulls/{number}"
+              pull = json.loads(field(endpoint, '{state,draft,base:.base.ref,head:.head.sha}'))
+              if pull != {"state": "open", "draft": False, "base": branch, "head": head}:
+                  print(f"#{number}: the pull request changed during evaluation.", flush=True)
+                  continue
               if field(f"repos/{repo}/branches/{branch}", ".commit.sha") != base:
                   print(f"#{number}: the default branch changed during evaluation.", flush=True)
                   continue
@@ -187,7 +198,6 @@ jobs:
               subprocess.run(command, check=True)
 
               if dispatch:
-                  endpoint = f"repos/{repo}/pulls/{number}"
                   merged = field(endpoint, '.merge_commit_sha | select(. != null)')
                   if not merged or field(f"repos/{repo}/branches/{branch}", ".commit.sha") != merged:
                       raise RuntimeError(f"#{number}: the merge is no longer the branch tip. Verify deployment manually.")
