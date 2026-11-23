@@ -1,0 +1,196 @@
+name: Dependabot security auto-merge
+
+on:
+  workflow_run:
+    workflows: ["Test browser game"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Evaluate eligibility without merging
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: dependabot-security-auto-merge
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       startsWith(github.event.workflow_run.head_branch, 'dependabot/'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: read-all
+    outputs:
+      candidates: ${{ steps.verify.outputs.candidates }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      REQUIRED_WORKFLOWS: '[391258627]'
+      CONDITIONAL_WORKFLOWS: '{}'
+      MANUAL_PATHS: '[]'
+      NATIVE_AUTO_MERGE: 'false'
+    steps:
+      - name: Verify the alert, PR, and CI
+        id: verify
+        shell: python
+        run: |
+          import fnmatch
+          import json
+          import os
+          import subprocess
+          from urllib.parse import urlencode
+
+          repo = os.environ["GH_REPO"]
+          owner, name = repo.split("/", 1)
+          branch = os.environ["DEFAULT_BRANCH"]
+          dry_run = os.environ["DRY_RUN"] == "true"
+          native_auto_merge = os.environ["NATIVE_AUTO_MERGE"] == "true"
+          required = json.loads(os.environ["REQUIRED_WORKFLOWS"])
+          conditional = json.loads(os.environ["CONDITIONAL_WORKFLOWS"])
+          manual_paths = json.loads(os.environ["MANUAL_PATHS"])
+
+          def api(endpoint, *args):
+              output = subprocess.check_output(["gh", "api", endpoint, *args], text=True)
+              return json.loads(output)
+
+          query = """
+          query($owner: String!, $name: String!, $endCursor: String) {
+            repository(owner: $owner, name: $name) {
+              vulnerabilityAlerts(first: 100, states: OPEN, after: $endCursor) {
+                pageInfo { hasNextPage endCursor }
+                nodes { dependabotUpdate { pullRequest { number } } }
+              }
+            }
+          }
+          """
+          alert_pages = api("graphql", "--paginate", "--slurp", "-f", f"query={query}",
+                            "-f", f"owner={owner}", "-f", f"name={name}")
+          linked = set()
+          for page in alert_pages:
+              for alert in page["data"]["repository"]["vulnerabilityAlerts"]["nodes"]:
+                  update = alert["dependabotUpdate"] or {}
+                  pull = update.get("pullRequest")
+                  if pull:
+                      linked.add(pull["number"])
+          print(f"Found {len(linked)} pull request(s) linked to open Dependabot alerts.", flush=True)
+
+          def passing_ci(workflow, number, head, base):
+              params = urlencode({"event": "pull_request", "head_sha": head, "per_page": 10})
+              runs = api(f"repos/{repo}/actions/workflows/{workflow}/runs?{params}")["workflow_runs"]
+              for run in runs:
+                  if not any(pr["number"] == number and pr["base"]["sha"] == base
+                             for pr in run["pull_requests"]):
+                      continue
+                  if run["status"] != "completed" or run["conclusion"] != "success":
+                      return False
+                  run_id, attempt = run["id"], run["run_attempt"]
+                  jobs = api(f"repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")["jobs"]
+                  return any(job["conclusion"] == "success" for job in jobs)
+              return False
+
+          def matches(paths, patterns):
+              return any(fnmatch.fnmatchcase(path, pattern) for path in paths for pattern in patterns)
+
+          candidates = []
+          for number in sorted(linked):
+              endpoint = f"repos/{repo}/pulls/{number}"
+              pr = api(endpoint)
+              if (pr["state"] != "open" or pr["draft"] or pr["user"]["login"] != "dependabot[bot]"
+                      or pr["base"]["ref"] != branch or not pr["head"]["ref"].startswith("dependabot/")
+                      or (pr["head"]["repo"] or {}).get("full_name") != repo or pr["auto_merge"]):
+                  continue
+              allowed_states = ("clean", "blocked") if native_auto_merge else ("clean",)
+              if not pr["mergeable"] or pr["mergeable_state"] not in allowed_states:
+                  print(f"#{number}: GitHub merge state is {pr['mergeable_state']}.", flush=True)
+                  continue
+
+              head = pr["head"]["sha"]
+              base = pr["base"]["sha"]
+              commit = api(f"repos/{repo}/commits/{head}")
+              if ((commit["author"] or {}).get("login") != "dependabot[bot]"
+                      or not commit["commit"]["verification"]["verified"]):
+                  print(f"#{number}: the head commit is not verified as Dependabot's.", flush=True)
+                  continue
+
+              if conditional or manual_paths:
+                  pages = api(f"{endpoint}/files?per_page=100", "--paginate", "--slurp")
+                  files = [file for page in pages for file in page]
+                  if len(files) != pr["changed_files"]:
+                      print(f"#{number}: the complete changed file list is unavailable.", flush=True)
+                      continue
+                  paths = [file[key] for file in files for key in ("filename", "previous_filename") if key in file]
+                  if matches(paths, manual_paths):
+                      print(f"#{number}: changed files require the normal deployment path.", flush=True)
+                      continue
+              checks = required + [workflow for workflow, patterns in conditional.items() if matches(paths, patterns)]
+              if not checks or not all(passing_ci(workflow, number, head, base) for workflow in checks):
+                  print(f"#{number}: required CI has not passed for the current head and base.", flush=True)
+                  continue
+
+              if dry_run:
+                  print(f"#{number}: eligible, dry run only.", flush=True)
+                  continue
+              candidates.append([number, head, base])
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              print(f"candidates={json.dumps(candidates)}", file=output)
+
+  merge:
+    needs: verify
+    if: needs.verify.outputs.candidates != '' && needs.verify.outputs.candidates != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      CANDIDATES: ${{ needs.verify.outputs.candidates }}
+      NATIVE_AUTO_MERGE: 'false'
+      AFTER_MERGE_WORKFLOW: '266342347'
+    steps:
+      - name: Merge the verified pull request
+        shell: python
+        run: |
+          import json
+          import os
+          import subprocess
+
+          repo = os.environ["GH_REPO"]
+          branch = os.environ["DEFAULT_BRANCH"]
+          dispatch = os.environ["AFTER_MERGE_WORKFLOW"]
+
+          def field(endpoint, expression):
+              return subprocess.check_output(["gh", "api", endpoint, "--jq", expression], text=True).strip()
+
+          for number, head, base in json.loads(os.environ["CANDIDATES"]):
+              if field(f"repos/{repo}/branches/{branch}", ".commit.sha") != base:
+                  print(f"#{number}: the default branch changed during evaluation.", flush=True)
+                  continue
+
+              command = ["gh", "pr", "merge", str(number), "--repo", repo, "--squash", "--match-head-commit", head]
+              if os.environ["NATIVE_AUTO_MERGE"] == "true":
+                  command.append("--auto")
+              subprocess.run(command, check=True)
+
+              if dispatch:
+                  endpoint = f"repos/{repo}/pulls/{number}"
+                  merged = field(endpoint, '.merge_commit_sha | select(. != null)')
+                  if not merged or field(f"repos/{repo}/branches/{branch}", ".commit.sha") != merged:
+                      raise RuntimeError(f"#{number}: the merge is no longer the branch tip. Verify deployment manually.")
+                  subprocess.run(["gh", "api", "--method", "POST",
+                                  f"repos/{repo}/actions/workflows/{dispatch}/dispatches",
+                                  "-f", f"ref={branch}"], check=True)
