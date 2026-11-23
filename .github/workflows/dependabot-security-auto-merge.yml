@@ -103,6 +103,7 @@ jobs:
               return any(fnmatch.fnmatchcase(path, pattern) for path in paths for pattern in patterns)
 
           candidates = []
+          base = api(f"repos/{repo}/branches/{branch}")["commit"]["sha"] if linked else None
           for number in sorted(linked):
               endpoint = f"repos/{repo}/pulls/{number}"
               pr = api(endpoint)
@@ -121,7 +122,6 @@ jobs:
                   continue
 
               head = pr["head"]["sha"]
-              base = pr["base"]["sha"]
               commit = api(f"repos/{repo}/commits/{head}")
               if ((commit["author"] or {}).get("login") != "dependabot[bot]"
                       or not commit["commit"]["verification"]["verified"]):
